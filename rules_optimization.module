@@ -1,0 +1,41 @@
+<?php
+/**
+ * Interface for optimized rules
+ */
+interface RulesOptimizationInterface {
+  /**
+   * Convert the input rules into a decision tree structure
+   * 
+   * @param $rules
+   *   All the rules trigerrable by the RulesRuleSet or RulesEventSet  
+   */
+  public function optimize($rules);
+}
+
+/**
+ * Class implementing optimization method
+ */
+class RulesOptimization extends FacesExtender implements RulesOptimizationInterface {
+  /**
+   * Implementation of optimize method
+   */
+  public function optimize($rules) {
+    foreach($rules as $rule) {
+      $this->insert_rule($rule);
+    }
+  }
+  
+  /**
+   * Inserts a rule in decision tree
+   */
+  public function insert_rule($rule) {
+    
+  }
+}
+
+/**
+ * An actual decision tree node
+ */
+class TreeNode extends RulesPlugin {
+  
+}
