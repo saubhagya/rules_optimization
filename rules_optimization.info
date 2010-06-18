@@ -1,0 +1,7 @@
+; $Id$
+name = Rules Optimization
+description = Optimize the performance of event sets and rule sets.
+package = Rules
+version = VERSION
+core = 7.x
+dependencies[] = Rules

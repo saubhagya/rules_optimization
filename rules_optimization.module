@@ -1,41 +1,42 @@
 <?php
-/**
- * Interface for optimized rules
- */
-interface RulesOptimizationInterface {
-  /**
-   * Convert the input rules into a decision tree structure
-   * 
-   * @param $rules
-   *   All the rules trigerrable by the RulesRuleSet or RulesEventSet  
-   */
-  public function optimize($rules);
-}
+// $Id$
 
 /**
- * Class implementing optimization method
+ * @file Rules Optimization classes and classes for decision tree.
  */
-class RulesOptimization extends FacesExtender implements RulesOptimizationInterface {
-  /**
-   * Implementation of optimize method
-   */
-  public function optimize($rules) {
-    foreach($rules as $rule) {
-      $this->insert_rule($rule);
-    }
-  }
-  
-  /**
-   * Inserts a rule in decision tree
-   */
-  public function insert_rule($rule) {
-    
-  }
-}
 
 /**
- * An actual decision tree node
+ * A decision tree node.
  */
 class TreeNode extends RulesPlugin {
-  
+
+  protected $left;
+  protected $right;
+  protected $data;
+
+  function __construct() {
+    $this->data = NULL;
+    $this->left = $this->right = NULL;
+  }
+
+  /**
+   * Set the input node to left of the current node.
+   */
+  protected function setLeft(TreeNode $node) {
+    $this->left = $node;
+  }
+
+  /**
+   * Set the input node to right of the current node.
+   */
+  protected function setRight(TreeNode $node) {
+    $this->right = $node;
+  }
+
+  /**
+   *Set the input data to the data of the current node.
+   */
+  protected function setData($data) {
+    $this->data = $data;
+  }
 }
