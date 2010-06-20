@@ -22,21 +22,21 @@ class TreeNode extends RulesPlugin {
   /**
    * Set the input node to left of the current node.
    */
-  protected function setLeft(TreeNode $node) {
+  public function setLeft(TreeNode $node) {
     $this->left = $node;
   }
 
   /**
    * Set the input node to right of the current node.
    */
-  protected function setRight(TreeNode $node) {
+  public function setRight(TreeNode $node) {
     $this->right = $node;
   }
 
   /**
    *Set the input data to the data of the current node.
    */
-  protected function setData($data) {
+  public function setData($data) {
     $this->data = $data;
   }
 }
