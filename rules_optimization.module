@@ -40,3 +40,142 @@ class TreeNode extends RulesPlugin {
     $this->data = $data;
   }
 }
+
+/**
+ * Class implementing a optimization method.
+ */
+class RulesOptimization extends FacesExtender implements RulesOptimizationInterface {
+
+  /**
+   * Empty default implementation.
+   */
+  public function optimize($rules) {
+
+  }
+
+  /**
+   * Conerts the input rule conditions to make them suitable for insertion in decision tree.
+   */
+  public function convert_rule_conditions($condition) {
+    $conditions = array(array($condition));
+    $flag = 1;
+    while($flag) {
+      $this->convert($conditions, $flag);
+    }
+    return $conditions;
+  }
+
+  /**
+   * Invoked by convert_rule_conditions for actual processing
+   */
+  public function convert(&$conditions, &$flag) {
+    $flag = 0;
+    $temp = $conditions;
+    $j = 0;
+    foreach($temp as $key => $condition) {
+      $i = 0;
+      foreach($condition as $c) {
+        if($c instanceof RulesAND) {
+          if(sizeof($c->getIterator()) == 0) {
+            array_splice($conditions[$key], $i, 1);
+            $flag = 1;
+            return;
+          }
+          array_splice($conditions[$key], $i, 1, $this->convert_AND($c));
+          $flag = 1;
+          return;
+        }
+        elseif($c instanceof RulesOR) {
+          if(sizeof($c->getIterator()) == 0) {
+            array_splice($conditions[$key], $i, 1);
+            $flag = 1;
+            return;
+          }
+          $array =  $this->convert_OR($c);
+          $temp2 = array();
+          foreach($array as $arr) {
+            $temp1 = $conditions[$key];
+            array_splice($temp1, $i, 1, $arr);
+            array_push($temp2, $temp1);
+          }
+          array_splice($conditions, $j, 1, $temp2);
+          $flag = 1;
+          return;
+        }
+        ++$i;
+      }
+      ++$j;
+    }
+    $flag = 0;
+  }
+
+  /**
+   * Converts the AND in the condition.
+   */
+  public function convert_AND($condition) {
+    if($condition->isNegated()){
+      $temp = rules_or();
+      foreach($condition->getIterator() as $child) {
+        $child->isNegated()?$child->negate(FALSE):$child->negate(TRUE);
+        $temp->condition($child);
+      }
+      return array($temp);
+    }
+    else {
+      return $condition->getIterator();
+    }
+  }
+
+  /**
+   * Converts RulesOR in the condition.
+   * @return
+   *   Array of arrays containing conditions in OR form.
+   */
+  public function convert_OR($condition) {
+    if($condition->isNegated()) {
+      $temp = rules_and();
+      foreach($condition->getIterator() as $child) {
+        $child->isNegated()?$child->negate(FALSE):$child->negate(TRUE);
+        $temp->condition($child);
+      }
+      return array(array($temp));
+    }
+    else {
+      $temp = array();
+      $array = array();
+      $i = 0;
+      foreach($condition->getIterator() as $child) {
+        $child->isNegated()?$child->negate(FALSE):$child->negate(TRUE);
+        $array[$i++] = $child;
+      }
+      for($j = 0; $j < $i; $j++) {
+        $temp[$j] = $this->array_copy($array);
+        $temp[$j][$j]->isNegated()?$temp[$j][$j]->negate(FALSE):$temp[$j][$j]->negate(TRUE);
+      }
+    }
+    return $temp;
+  }
+
+  /**
+   * Return the copy of the input array.
+   */
+  function array_copy ($array) {
+    $return = array();
+
+    $keys = array_keys($array);
+    $values = array_values($array);
+
+    for ($i = 0; $i < count($keys); $i++) {
+      if (is_object($values[$i])) {
+        $return[$keys[$i]]=clone $values[$i];
+      }
+      elseif (is_array($values[$i])) {
+        $return[$keys[$i]]=array_copy ($values[$i]);
+      }
+      else {
+        $return[$keys[$i]]=$values[$i];
+      }
+    }
+    return $return;
+  }
+}
