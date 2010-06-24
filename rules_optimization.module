@@ -49,7 +49,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   /**
    * Empty default implementation.
    */
-  public function optimize($rules) {
+  public function optimize() {
 
   }
 
@@ -59,7 +59,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   public function convert_rule_conditions($condition) {
     $conditions = array(array($condition));
     $flag = 1;
-    while($flag) {
+    while ($flag) {
       $this->convert($conditions, $flag);
     }
     return $conditions;
@@ -72,11 +72,11 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     $flag = 0;
     $temp = $conditions;
     $j = 0;
-    foreach($temp as $key => $condition) {
+    foreach ($temp as $key => $condition) {
       $i = 0;
-      foreach($condition as $c) {
-        if($c instanceof RulesAND) {
-          if(sizeof($c->getIterator()) == 0) {
+      foreach ($condition as $c) {
+        if ($c instanceof RulesAND) {
+          if (sizeof($c->getIterator()) == 0) {
             array_splice($conditions[$key], $i, 1);
             $flag = 1;
             return;
@@ -85,15 +85,15 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
           $flag = 1;
           return;
         }
-        elseif($c instanceof RulesOR) {
-          if(sizeof($c->getIterator()) == 0) {
+        elseif ($c instanceof RulesOR) {
+          if (sizeof($c->getIterator()) == 0) {
             array_splice($conditions[$key], $i, 1);
             $flag = 1;
             return;
           }
-          $array =  $this->convert_OR($c);
+          $array = $this->convert_OR($c);
           $temp2 = array();
-          foreach($array as $arr) {
+          foreach ($array as $arr) {
             $temp1 = $conditions[$key];
             array_splice($temp1, $i, 1, $arr);
             array_push($temp2, $temp1);
@@ -113,9 +113,9 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * Converts the AND in the condition.
    */
   public function convert_AND($condition) {
-    if($condition->isNegated()){
+    if ($condition->isNegated()) {
       $temp = rules_or();
-      foreach($condition->getIterator() as $child) {
+      foreach ($condition->getIterator() as $child) {
         $child->isNegated()?$child->negate(FALSE):$child->negate(TRUE);
         $temp->condition($child);
       }
@@ -132,9 +132,9 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    *   Array of arrays containing conditions in OR form.
    */
   public function convert_OR($condition) {
-    if($condition->isNegated()) {
+    if ($condition->isNegated()) {
       $temp = rules_and();
-      foreach($condition->getIterator() as $child) {
+      foreach ($condition->getIterator() as $child) {
         $child->isNegated()?$child->negate(FALSE):$child->negate(TRUE);
         $temp->condition($child);
       }
@@ -144,11 +144,11 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $temp = array();
       $array = array();
       $i = 0;
-      foreach($condition->getIterator() as $child) {
+      foreach ($condition->getIterator() as $child) {
         $child->isNegated()?$child->negate(FALSE):$child->negate(TRUE);
         $array[$i++] = $child;
       }
-      for($j = 0; $j < $i; $j++) {
+      for ($j = 0; $j < $i; $j++) {
         $temp[$j] = $this->array_copy($array);
         $temp[$j][$j]->isNegated()?$temp[$j][$j]->negate(FALSE):$temp[$j][$j]->negate(TRUE);
       }
@@ -159,7 +159,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   /**
    * Return the copy of the input array.
    */
-  function array_copy ($array) {
+  function array_copy($array) {
     $return = array();
 
     $keys = array_keys($array);

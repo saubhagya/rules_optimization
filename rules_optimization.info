@@ -4,4 +4,6 @@ description = Optimize the performance of event sets and rule sets.
 package = Rules
 version = VERSION
 core = 7.x
-dependencies[] = Rules
+files[] = rules_optimization.module
+files[] = rules_optimization.rules.inc
+dependencies[] = rules
