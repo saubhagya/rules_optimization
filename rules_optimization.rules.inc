@@ -6,21 +6,26 @@
  */
 
 /**
- * Implementation of hook_rules_plugin_info_alter().
+ * Implementation of hook_rules_plugin_info().
  */
-function rules_optimization_rules_pugin_info_alter() {
+function rules_optimization_rules_pugin_info() {
   return array(
-    'TreeNode' => array(
+    'Tree Node' => array(
       'class' => 'TreeNode',
       'embeddable' => FALSE,
     ),
-    'Optimizer' => array(
-      'class' => 'RulesOptimization',
-      'embeddable' => FALSE,
-      'extenders' => array(
-        'RulesOptimizationInterface' => array(
-          'class' => 'RulesOptimization',
-        ),
+  );
+}
+
+/**
+ * Implementation of hook_rules_plugin_info_alter().
+ */
+function rules_optimization_rules_plugin_info_alter(&$plugin_info) {
+  $plugin_info['event set']['extenders']['RulesOptimizationInterface'] = array(
+    'class' => 'RulesOptimization',
+    'overrides' => array(
+      'methods' => array(
+        'optimize',
       ),
     ),
   );
