@@ -6,7 +6,7 @@
  */
 
 /**
- * Implementation of hook_rules_plugin_info().
+ * Implements hook_rules_plugin_info().
  */
 function rules_optimization_rules_pugin_info() {
   return array(
@@ -18,7 +18,7 @@ function rules_optimization_rules_pugin_info() {
 }
 
 /**
- * Implementation of hook_rules_plugin_info_alter().
+ * Implements hook_rules_plugin_info_alter().
  */
 function rules_optimization_rules_plugin_info_alter(&$plugin_info) {
   $plugin_info['event set']['extenders']['RulesOptimizationInterface'] = array(
