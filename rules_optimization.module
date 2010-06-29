@@ -224,7 +224,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
             }
             array_push($temp2, array(0 => $direction, 1 => $m));
           }
-          elseif ($n->data == NULL) {
+          else {
             array_push($temp2, array(0 => $prevDirection, 1 => $prevNode));
           }
         }
