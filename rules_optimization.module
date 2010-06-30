@@ -13,10 +13,12 @@ class TreeNode extends RulesPlugin {
   public $left;
   public $right;
   public $data;
+  public $isLeaf;
 
   function __construct() {
     $this->data = NULL;
     $this->left = $this->right = NULL;
+    $this->isLeaf = FALSE;
   }
 }
 
@@ -45,6 +47,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $conditions = array_merge($conditions, $newCondition);
     }
     $this->insert_rule_conditions($conditions, $allCondition);
+    RulesLog::logger()->checkLog();
   }
 
   /**
@@ -156,6 +159,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   public function insert_rule_conditions($conditions, $allCondition) {
     $root = new TreeNode;
     $dummy = new TreeNode;
+    $dummy->isLeaf = TRUE;
     $root->left = $dummy;
     foreach ($conditions as $condition) {
       $rule = end($condition);
@@ -163,6 +167,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $this->sort($condition, $allCondition);
       $this->insert($root, $condition, $allCondition, $rule);
     }
+    $this->trace_tree($root->left, 0);
     return $root;
   }
 
@@ -319,15 +324,33 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * Add the input rule at the leaves accessible by input node.
    */
   public function fill_the_rule($node, $rule) {
-    if ($node->data == NULL) {
-      $node->data = array($rule);
-    }
-    elseif (is_array($node->data)) {
-      array_push($node->data, $rule);
+    if($node->isLeaf) {
+      if ($node->data == NULL) {
+        $node->data = array($rule);
+      }
+      else {
+        array_push($node->data, $rule);
+      }
     }
     else {
       $this->fill_the_rule($node->left, $rule);
       $this->fill_the_rule($node->right, $rule);
+    }
+  }
+
+  /**
+   * Traces whole the tree and logs it.
+   */
+  public function trace_tree($root, $i) {
+    if ($root->data != NULL) {
+      if (is_array($root->data))
+        foreach ($root->data as $d)
+          rules_log("Rule %name at level %level",array('%name' => $d, '%level' => $i));
+      else {
+        rules_log("Condition %name at level %level",array('%name' => $root->data, '%level' => $i));
+        $this->trace_tree($root->left, $i + 1);
+        $this->trace_tree($root->right, $i + 1);
+      }
     }
   }
 }
