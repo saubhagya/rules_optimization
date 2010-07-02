@@ -255,7 +255,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         $temp1[$i] = $temp2[$i];
     }
     foreach ($temp1 as $arr) {
-      $node = $prevDirection == 'LEFT'?$prevNode->left:$prevNode->right;
+      $node = $prevDirection == 'LEFT'?$arr[1]->left:$arr[1]->right;
       $this->fillRule($node, $rule);
     }
   }
