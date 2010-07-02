@@ -31,29 +31,34 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * Implementation of optimize method.
    */
   public function optimize() {
+    $tree = new TreeNode;
     $rules = $this->getExtendable();
     $conditions = array();
     $allCondition = array();
     foreach ($rules as $rule) {
       $newCondition = rules_and();
-      foreach ($rule->conditions() as $condition) {
-        $newCondition->condition($condition);
+      if ($rule->conditions() != NULL) {
+        foreach ($rule->conditions() as $condition) {
+          $newCondition->condition($condition);
+        }
+        $newCondition = $this->convertRuleConditions($newCondition);
+        $this->merge($this->arrayCopy($newCondition[0]), $allCondition);
+        foreach ($newCondition as $key => $nc) {
+          array_push($newCondition[$key], $rule);
+        }
+        $conditions = array_merge($conditions, $newCondition);
       }
-      $newCondition = $this->convert_rule_conditions($newCondition);
-      $this->merge($this->array_copy($newCondition[0]), $allCondition);
-      foreach ($newCondition as $key => $nc) {
-        array_push($newCondition[$key], $rule);
-      }
-      $conditions = array_merge($conditions, $newCondition);
     }
-    $this->insert_rule_conditions($conditions, $allCondition);
+    if (!empty($allCondition))
+      $tree = $this->insertRuleConditions($conditions, $allCondition);
     RulesLog::logger()->checkLog();
+    return $tree;
   }
 
   /**
    * Conerts the input rule conditions to make them suitable for insertion in decision tree.
    */
-  public function convert_rule_conditions($condition) {
+  public function convertRuleConditions($condition) {
     $conditions = array(array($condition));
     $flag = 1;
     while ($flag) {
@@ -63,7 +68,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Invoked by convert_rule_conditions for actual processing.
+   * Invoked by convertRuleConditions for actual processing.
    */
   public function convert(&$conditions, &$flag) {
     $flag = 0;
@@ -78,7 +83,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
             $flag = 1;
             return;
           }
-          array_splice($conditions[$key], $i, 1, $this->convert_AND($c));
+          array_splice($conditions[$key], $i, 1, $this->convertAND($c));
           $flag = 1;
           return;
         }
@@ -88,7 +93,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
             $flag = 1;
             return;
           }
-          $array = $this->convert_OR($c);
+          $array = $this->convertOR($c);
           $temp2 = array();
           foreach ($array as $arr) {
             $temp1 = $conditions[$key];
@@ -109,7 +114,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   /**
    * Converts the AND in the condition.
    */
-  public function convert_AND($condition) {
+  public function convertAND($condition) {
     if ($condition->isNegated()) {
       $temp = rules_or();
       foreach ($condition->getIterator() as $child) {
@@ -128,7 +133,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * @return
    *   Array of arrays containing conditions in OR form.
    */
-  public function convert_OR($condition) {
+  public function convertOR($condition) {
     if ($condition->isNegated()) {
       $temp = rules_and();
       foreach ($condition->getIterator() as $child) {
@@ -146,7 +151,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         $array[$i++] = $child;
       }
       for ($j = 0; $j < $i; $j++) {
-        $temp[$j] = $this->array_copy($array);
+        $temp[$j] = $this->arrayCopy($array);
         $temp[$j][$j]->isNegated()?$temp[$j][$j]->negate(FALSE):$temp[$j][$j]->negate(TRUE);
       }
     }
@@ -156,7 +161,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   /**
    * Inserts the converted conditions and corresponding rule in the decision tree.
    */
-  public function insert_rule_conditions($conditions, $allCondition) {
+  public function insertRuleConditions($conditions, $allCondition) {
     $root = new TreeNode;
     $dummy = new TreeNode;
     $dummy->isLeaf = TRUE;
@@ -167,7 +172,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $this->sort($condition, $allCondition);
       $this->insert($root, $condition, $allCondition, $rule);
     }
-    $this->trace_tree($root->left, 0);
+    $this->traceTree($root->left, 0);
     return $root;
   }
 
@@ -201,7 +206,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Invoked by insert_rule_conditions to insert individual rule conditions.
+   * Invoked by insertRuleConditions to insert individual rule conditions.
    */
   public function insert(&$root, $conditions, $allCondition, $rule) {
     $temp1 = array(array(0 => 'LEFT', 1 => $root));
@@ -219,7 +224,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
             $m = new TreeNode;
             $m->data = $condition;
             $m->left = $n;
-            $o = $this->tree_copy($n);
+            $o = $this->treeCopy($n);
             $m->right = $o;
             if ($prevDirection == 'LEFT') {
               $prevNode->left = $m;
@@ -251,21 +256,21 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     }
     foreach ($temp1 as $arr) {
       $node = $prevDirection == 'LEFT'?$prevNode->left:$prevNode->right;
-      $this->fill_the_rule($node, $rule);
+      $this->fillRule($node, $rule);
     }
   }
 
   /**
    * Returns the exact copy of the input tree.
    */
-  public function tree_copy($tree) {
+  public function treeCopy($tree) {
     $root = new TreeNode;
     $root->data = $tree->data;
     if ($tree->left != NULL) {
-      $root->left = $this->tree_copy($tree->left);
+      $root->left = $this->treeCopy($tree->left);
     }
     if ($tree->right != NULL) {
-      $root->right = $this->tree_copy($tree->right);
+      $root->right = $this->treeCopy($tree->right);
     }
     return $root;
   }
@@ -300,7 +305,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   /**
    * Return the copy of the input array.
    */
-  public function array_copy($array) {
+  public function arrayCopy($array) {
     $return = array();
 
     $keys = array_keys($array);
@@ -311,7 +316,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         $return[$keys[$i]] = clone $values[$i];
       }
       elseif (is_array($values[$i])) {
-        $return[$keys[$i]] = array_copy($values[$i]);
+        $return[$keys[$i]] = arrayCopy($values[$i]);
       }
       else {
         $return[$keys[$i]] = $values[$i];
@@ -323,7 +328,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   /**
    * Add the input rule at the leaves accessible by input node.
    */
-  public function fill_the_rule($node, $rule) {
+  public function fillRule($node, $rule) {
     if($node->isLeaf) {
       if ($node->data == NULL) {
         $node->data = array($rule);
@@ -333,23 +338,23 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       }
     }
     else {
-      $this->fill_the_rule($node->left, $rule);
-      $this->fill_the_rule($node->right, $rule);
+      $this->fillRule($node->left, $rule);
+      $this->fillRule($node->right, $rule);
     }
   }
 
   /**
    * Traces whole the tree and logs it.
    */
-  public function trace_tree($root, $i) {
+  public function traceTree($root, $i) {
     if ($root->data != NULL) {
       if (is_array($root->data))
         foreach ($root->data as $d)
           rules_log("Rule %name at level %level",array('%name' => $d, '%level' => $i));
       else {
         rules_log("Condition %name at level %level",array('%name' => $root->data, '%level' => $i));
-        $this->trace_tree($root->left, $i + 1);
-        $this->trace_tree($root->right, $i + 1);
+        $this->traceTree($root->left, $i + 1);
+        $this->traceTree($root->right, $i + 1);
       }
     }
   }
