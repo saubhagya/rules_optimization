@@ -32,7 +32,8 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    */
   public function optimize() {
     $tree = new TreeNode;
-    $rules = $this->getExtendable();
+    $event = $this->getExtendable();
+    $rules = $event->getIterator();
     $conditions = array();
     $allCondition = array();
     foreach ($rules as $rule) {
@@ -219,7 +220,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         $prevDirection = $arr[0];
         $prevNode = $arr[1];
         $n = $prevDirection == 'LEFT'?$prevNode->left:$prevNode->right;
-        if ($n->data == NULL || $condition->getElementName() != $n->data->getElementName()) {
+        if ($n->isLeaf == TRUE || $condition->getElementName() != $n->data->getElementName()) {
           if ($direction != 'BOTH') {
             $m = new TreeNode;
             $m->data = $condition;
