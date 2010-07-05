@@ -2,7 +2,7 @@
 // $Id$
 
 /**
- * @file Rules Optimization classes and classes for decision tree.
+ * @file Rules Optimization class and class for decision tree.
  */
 
 /**
@@ -54,29 +54,32 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * Implementation of optimize method.
    */
   public function optimize() {
+
     $tree = new TreeNode;
-    $event = $this->getExtendable();
-    $rules = $event->getIterator();
     $conditions = array();
     $allCondition = array();
+    $event = $this->getExtendable();
+    $rules = $event->getIterator();
+
     foreach ($rules as $rule) {
-      $newCondition = rules_and();
+      $newConditions = rules_and();
       if ($rule->conditions() != NULL) {
         foreach ($rule->conditions() as $condition) {
-          $newCondition->condition($condition);
+          $newConditions->condition($condition);
         }
-        $newCondition = $this->convertRuleConditions($newCondition);
-        $this->merge($this->arrayCopy($newCondition[0]), $allCondition);
-        foreach ($newCondition as $key => $nc) {
-          array_push($newCondition[$key], $rule);
+        $newConditions = $this->convertRuleConditions($newConditions);
+        $this->getAllCondition($this->arrayCopy($newConditions[0]), $allCondition);
+        foreach ($newConditions as $key => $nc) {
+          array_push($newConditions[$key], $rule);
         }
-        $conditions = array_merge($conditions, $newCondition);
+        $conditions = array_merge($conditions, $newConditions);
       }
     }
+
     if (!empty($allCondition)) {
       $tree = $this->insertRuleConditions($conditions, $allCondition);
     }
-    RulesLog::logger()->checkLog();
+
     $flag = 1;
     while ($flag) {
       $flag = 0;
@@ -85,6 +88,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         $child->delete($child);
       }
     }
+    RulesLog::logger()->checkLog();
     $event->rule($tree->children['left']);
   }
 
@@ -92,6 +96,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * Conerts the input rule conditions to make them suitable for insertion in decision tree.
    */
   public function convertRuleConditions($condition) {
+
     $conditions = array(array($condition));
     $flag = 1;
     while ($flag) {
@@ -104,42 +109,45 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * Invoked by convertRuleConditions for actual processing.
    */
   public function convert(&$conditions, &$flag) {
+
     $flag = 0;
-    $temp = $conditions;
-    $j = 0;
-    foreach ($temp as $key => $condition) {
-      $i = 0;
-      foreach ($condition as $c) {
-        if ($c instanceof RulesAND) {
-          if (sizeof($c->getIterator()) == 0) {
-            array_splice($conditions[$key], $i, 1);
+    $auxConditions = $conditions;
+    $conditionArrCount = 0;
+
+    foreach ($auxConditions as $key => $conditionArr) {
+      $conditionCount = 0;
+      foreach ($conditionArr as $condition) {
+
+        if ($condition instanceof RulesAND) {
+          if (sizeof($condition->getIterator()) == 0) {
+            array_splice($conditions[$key], $conditionCount, 1);
             $flag = 1;
             return;
           }
-          array_splice($conditions[$key], $i, 1, $this->convertAND($c));
+          array_splice($conditions[$key], $conditionCount, 1, $this->convertAND($condition));
           $flag = 1;
           return;
         }
-        elseif ($c instanceof RulesOR) {
-          if (sizeof($c->getIterator()) == 0) {
-            array_splice($conditions[$key], $i, 1);
+        elseif ($condition instanceof RulesOR) {
+          if (sizeof($condition->getIterator()) == 0) {
+            array_splice($conditions[$key], $conditionCount, 1);
             $flag = 1;
             return;
           }
-          $array = $this->convertOR($c);
-          $temp2 = array();
-          foreach ($array as $arr) {
-            $temp1 = $conditions[$key];
-            array_splice($temp1, $i, 1, $arr);
-            array_push($temp2, $temp1);
+          $convertedORArray = $this->convertOR($condition);
+          $auxArr = array();
+          foreach ($convertedORArray as $arr) {
+            $auxConditionArr = $conditions[$key];
+            array_splice($auxConditionArr, $conditionCount, 1, $arr);
+            array_push($auxArr, $auxConditionArr);
           }
-          array_splice($conditions, $j, 1, $temp2);
+          array_splice($conditions, $conditionArrCount, 1, $auxArr);
           $flag = 1;
           return;
         }
-        ++$i;
+        $conditionCount++;
       }
-      ++$j;
+      $conditionArrCount++;
     }
     $flag = 0;
   }
@@ -149,12 +157,12 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    */
   public function convertAND($condition) {
     if ($condition->isNegated()) {
-      $temp = rules_or();
+      $newCondition = rules_or();
       foreach ($condition->getIterator() as $child) {
         $child->isNegated()?$child->negate(FALSE):$child->negate(TRUE);
-        $temp->condition($child);
+        $newCondition->condition($child);
       }
-      return array($temp);
+      return array($newCondition);
     }
     else {
       return $condition->getIterator();
@@ -168,43 +176,45 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    */
   public function convertOR($condition) {
     if ($condition->isNegated()) {
-      $temp = rules_and();
+      $newCondition = rules_and();
       foreach ($condition->getIterator() as $child) {
         $child->isNegated()?$child->negate(FALSE):$child->negate(TRUE);
-        $temp->condition($child);
+        $newCondition->condition($child);
       }
-      return array(array($temp));
+      return array(array($newCondition));
     }
     else {
-      $temp = array();
+      $newConditionArr = array();
       $array = array();
-      $i = 0;
+      $conditionCount = 0;
       foreach ($condition->getIterator() as $child) {
         $child->isNegated()?$child->negate(FALSE):$child->negate(TRUE);
-        $array[$i++] = $child;
+        $array[$conditionCount++] = $child;
       }
-      for ($j = 0; $j < $i; $j++) {
-        $temp[$j] = $this->arrayCopy($array);
-        $temp[$j][$j]->isNegated()?$temp[$j][$j]->negate(FALSE):$temp[$j][$j]->negate(TRUE);
+      for ($count = 0; $count < $conditionCount; $count++) {
+        $newConditionArr[$count] = $this->arrayCopy($array);
+        $newConditionArr[$count][$count]->isNegated()?$newConditionArr[$count][$count]->negate(FALSE):$newConditionArr[$count][$count]->negate(TRUE);
       }
     }
-    return $temp;
+    return $newConditionArr;
   }
 
   /**
    * Inserts the converted conditions and corresponding rule in the decision tree.
    */
   public function insertRuleConditions($conditions, $allCondition) {
+
     $root = new TreeNode;
     $dummy = new TreeNode;
     $dummy->isLeaf = TRUE;
     $dummy->children = array();
     $root->children['left'] = $dummy;
-    foreach ($conditions as $condition) {
-      $rule = end($condition);
-      array_splice($condition, sizeof($condition) - 1);
-      $this->sort($condition, $allCondition);
-      $this->insert($root, $condition, $allCondition, $rule);
+
+    foreach ($conditions as $conditionArr) {
+      $rule = end($conditionArr);
+      array_splice($conditionArr, sizeof($conditionArr) - 1);
+      $this->sortConditionArr($conditionArr, $allCondition);
+      $this->insert($root, $conditionArr, $allCondition, $rule);
     }
     $this->traceTree($root->children['left'], 0);
     return $root;
@@ -213,84 +223,89 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   /**
    * Sort the input condition array as the allCondition array.
    */
-  public function sort(&$condition, $allCondition) {
-    $temp = array();
+  public function sortConditionArr(&$conditionArr, $allCondition) {
+
+    $auxConditionArr = array();
     $size = sizeof($allCondition);
-    for ($i = 0; $i < $size; $i++) {
-      $flag[$i] = 0;
+
+    for ($count = 0; $count < $size; $count++) {
+      $flag[$count] = 0;
     }
-    for ($i = 0; $i < $size; $i++) {
-      if ($flag[$i] == 0) {
-        foreach ($condition as $c) {
-          if ($allCondition[$i]->getElementName() == $c->getElementName()) {
-            $flag[$i] = 1;
-            if ($c->isNegated())
-              $temp[$i] = 'RIGHT';
-            else
-              $temp[$i] = 'LEFT';
+    for ($count = 0; $count < $size; $count++) {
+      if ($flag[$count] == 0) {
+        foreach ($conditionArr as $c) {
+          if ($allCondition[$count]->getElementName() == $c->getElementName()) {
+            $flag[$count] = 1;
+            $auxConditionArr[$count] = $c->isNegated()?'RIGHT':'LEFT';
             break;
           }
         }
       }
     }
-    for ($i = 0; $i < $size; $i++)
-      if (!$flag[$i])
-        $temp[$i] = 'BOTH';
-    $condition = $temp;
+
+    for ($count = 0; $count < $size; $count++) {
+      if (!$flag[$count]) {
+        $auxConditionArr[$count] = 'BOTH';
+      }
+    }
+    $conditionArr = $auxConditionArr;
   }
 
   /**
    * Invoked by insertRuleConditions to insert individual rule conditions.
    */
   public function insert(&$root, $conditions, $allCondition, $rule) {
-    $temp1 = array(array(0 => 'LEFT', 1 => $root));
+
+    $prevArr = array(array(0 => 'LEFT', 1 => $root));
     $arrSize = sizeof($allCondition);
+
     for ($key = 0; $key < $arrSize; $key++) {
       $condition = $allCondition[$key];
       $direction = $conditions[$key];
-      $temp2 = array();
-      foreach ($temp1 as $arr) {
+      $auxArr = array();
+
+      foreach ($prevArr as $arr) {
         $prevDirection = $arr[0];
         $prevNode = $arr[1];
-        $n = $prevDirection == 'LEFT'?$prevNode->children['left']:$prevNode->children['right'];
-        if ($n->isLeaf == TRUE || $condition->getElementName() != $n->data->getElementName()) {
+        $node = $prevDirection == 'LEFT'?$prevNode->children['left']:$prevNode->children['right'];
+
+        if ($node->isLeaf == TRUE || $condition->getElementName() != $node->data->getElementName()) {
           if ($direction != 'BOTH') {
-            $m = new TreeNode;
-            $m->data = $condition;
-            $m->children['left'] = $n;
-            $o = $this->treeCopy($n);
-            $m->children['right'] = $o;
+            $newNode = new TreeNode;
+            $newNode->data = $condition;
+            $newNode->children['left'] = $node;
+            $newNode->children['right'] = $this->treeCopy($node);;
             if ($prevDirection == 'LEFT') {
-              $prevNode->children['left'] = $m;
+              $prevNode->children['left'] = $newNode;
             }
             else {
-              $prevNode->children['right'] = $m;
+              $prevNode->children['right'] = $newNode;
             }
-            array_push($temp2, array(0 => $direction, 1 => $m));
+            array_push($auxArr, array(0 => $direction, 1 => $newNode));
           }
           else {
-            array_push($temp2, array(0 => $prevDirection, 1 => $prevNode));
+            array_push($auxArr, array(0 => $prevDirection, 1 => $prevNode));
           }
         }
         else {
           if ($direction == 'BOTH') {
-            array_push($temp2, array(0 => 'LEFT', 1 => $n), array(0 => 'RIGHT', 1 => $n));
+            array_push($auxArr, array(0 => 'LEFT', 1 => $node), array(0 => 'RIGHT', 1 => $node));
           }
           elseif ($direction == 'LEFT') {
-            array_push($temp2, array(0 => 'LEFT', 1 => $n));
+            array_push($auxArr, array(0 => 'LEFT', 1 => $node));
           }
           else {
-            array_push($temp2, array(0 => 'RIGHT', 1 => $n));
+            array_push($auxArr, array(0 => 'RIGHT', 1 => $node));
           }
         }
       }
-      $size = sizeof($temp2);
-      for ($i = 0; $i < $size; $i++)
-        $temp1[$i] = $temp2[$i];
+      $size = sizeof($auxArr);
+      for ($count = 0; $count < $size; $count++)
+        $prevArr[$count] = $auxArr[$count];
     }
-    foreach ($temp1 as $arr) {
+    foreach ($prevArr as $arr) {
       $node = $arr[0] == 'LEFT'?$arr[1]->children['left']:$arr[1]->children['right'];
-      $this->fillRule($node, $rule);
+      $this->addRule($node, $rule);
     }
   }
 
@@ -298,9 +313,11 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * Returns the exact copy of the input tree.
    */
   public function treeCopy($tree) {
+
     $root = new TreeNode;
     $root->data = $tree->data;
     $root->isLeaf = $tree->isLeaf;
+
     if ($root->isLeaf) {
       $root->children = array();
       foreach ($tree->children as $child) {
@@ -321,25 +338,27 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   /**
    * Append the new conditions of input temp to allCondition.
    */
-  public function merge($temp, &$allCondition) {
+  public function getAllCondition($conditionArr, &$allCondition) {
+
     $size = sizeof($allCondition);
-    $temp2 = array();
-    foreach ($temp as $t) {
-      array_push($temp2, $t->isNegated()?$t->negate(FALSE):$t);
+    $nonNegatedConditions = array();
+
+    foreach ($conditionArr as $condition) {
+      array_push($nonNegatedConditions, $condition->isNegated()?$condition->negate(FALSE):$condition);
     }
-    for ($i = 0; $i < $size; $i++) {
-      $flag[$i] = 0;
+    for ($count = 0; $count < $size; $count++) {
+      $flag[$count] = 0;
     }
-    foreach ($temp2 as $t) {
-      $a = 0;
-      for ($i = 0; $i < $size; $i++) {
-        if ($flag[$i] == 0 && $allCondition[$i]->getElementName() == $t->getElementName()) {
-          $flag[$i] = 1;
-          $a = 1;
+    foreach ($nonNegatedConditions as $condition) {
+      $found = 0;
+      for ($count = 0; $count < $size; $count++) {
+        if ($flag[$count] == 0 && $allCondition[$count]->getElementName() == $condition->getElementName()) {
+          $flag[$count] = 1;
+          $found = 1;
         }
       }
-      if (!$a) {
-        array_push($allCondition, $t);
+      if (!$found) {
+        array_push($allCondition, $condition);
       }
     }
     return $allCondition;
@@ -349,20 +368,20 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * Return the copy of the input array.
    */
   public function arrayCopy($array) {
-    $return = array();
 
+    $return = array();
     $keys = array_keys($array);
     $values = array_values($array);
 
-    for ($i = 0; $i < count($keys); $i++) {
-      if (is_object($values[$i])) {
-        $return[$keys[$i]] = clone $values[$i];
+    for ($count = 0; $count < count($keys); $count++) {
+      if (is_object($values[$count])) {
+        $return[$keys[$count]] = clone $values[$count];
       }
-      elseif (is_array($values[$i])) {
-        $return[$keys[$i]] = arrayCopy($values[$i]);
+      elseif (is_array($values[$count])) {
+        $return[$keys[$count]] = arrayCopy($values[$count]);
       }
       else {
-        $return[$keys[$i]] = $values[$i];
+        $return[$keys[$count]] = $values[$count];
       }
     }
     return $return;
@@ -371,30 +390,31 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   /**
    * Add the input rule at the leaves accessible by input node.
    */
-  public function fillRule(&$node, $rule) {
+  public function addRule(&$node, $rule) {
     if ($node->isLeaf) {
       foreach ($rule->actions() as $action) {
         array_push($node->children, $action);
       }
     }
     else {
-      $this->fillRule($node->children['left'], $rule);
-      $this->fillRule($node->children['right'], $rule);
+      $this->addRule($node->children['left'], $rule);
+      $this->addRule($node->children['right'], $rule);
     }
   }
 
   /**
    * Traces whole the tree and logs it.
    */
-  public function traceTree($root, $i) {
+  public function traceTree($root, $level) {
     if ($root->isLeaf) {
-      foreach ($root->children as $action)
-        rules_log("Action %name at level %level",array('%name' => $action, '%level' => $i));
+      foreach ($root->children as $action) {
+        rules_log("Action %name at level %level", array('%name' => $action, '%level' => $level));
+      }
     }
     else {
-      rules_log("Condition %name at level %level",array('%name' => $root->data, '%level' => $i));
-      $this->traceTree($root->children['left'], $i + 1);
-      $this->traceTree($root->children['right'], $i + 1);
+      rules_log("Condition %name at level %level", array('%name' => $root->data, '%level' => $level));
+      $this->traceTree($root->children['left'], $level + 1);
+      $this->traceTree($root->children['right'], $level + 1);
     }
   }
 }
