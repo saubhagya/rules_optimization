@@ -234,7 +234,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     for ($count = 0; $count < $size; $count++) {
       if ($flag[$count] == 0) {
         foreach ($conditionArr as $c) {
-          if ($allCondition[$count]->getElementName() == $c->getElementName()) {
+          if ($allCondition[$count]->getElementName() == $c->getElementName() && $allCondition[$count]->settings == $c->settings) {
             $flag[$count] = 1;
             $auxConditionArr[$count] = $c->isNegated()?'RIGHT':'LEFT';
             break;
@@ -269,7 +269,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         $prevNode = $arr[1];
         $node = $prevDirection == 'LEFT'?$prevNode->children['left']:$prevNode->children['right'];
 
-        if ($node->isLeaf == TRUE || $condition->getElementName() != $node->data->getElementName()) {
+        if ($node->isLeaf == TRUE || ($condition->getElementName() != $node->data->getElementName() && $condition->settings == $node->settings)) {
           if ($direction != 'BOTH') {
             $newNode = new TreeNode;
             $newNode->data = $condition;
@@ -352,7 +352,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     foreach ($nonNegatedConditions as $condition) {
       $found = 0;
       for ($count = 0; $count < $size; $count++) {
-        if ($flag[$count] == 0 && $allCondition[$count]->getElementName() == $condition->getElementName()) {
+        if ($flag[$count] == 0 && $allCondition[$count]->getElementName() == $condition->getElementName() && $allCondition[$count]->settings == $condition->settings) {
           $flag[$count] = 1;
           $found = 1;
         }
