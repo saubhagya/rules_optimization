@@ -189,7 +189,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * @return
    *   Array containing conditions in AND form.
    *
-   * @see RulesAND.
+   * @see RulesAND
    */
   public function convertAND($condition) {
     // AND is negated, convert it into OR and change negation sign of all the children. Simple logic.
@@ -215,7 +215,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * @return
    *   Array of arrays containing conditions in AND form.
    *
-   * @see RulesOR.
+   * @see RulesOR
    */
   public function convertOR($condition) {
     if ($condition->isNegated()) {
@@ -360,7 +360,6 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
 
     for ($key = 0; $key < $arrSize; $key++) {
       $condition = $allCondition[$key];
-      // @see sortConditionArr()
       $direction = $conditions[$key];
       // This array would be created in this pass, which would be $prevArr in next pass. Initialized as empty.
       $auxArr = array();

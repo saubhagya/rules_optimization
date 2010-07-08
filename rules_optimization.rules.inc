@@ -2,7 +2,8 @@
 // $Id$
 
 /**
- * @file rules integration for rules_optimization module.
+ * @file
+ * rules integration for rules_optimization module.
  */
 
 /**
