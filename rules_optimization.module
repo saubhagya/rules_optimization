@@ -2,7 +2,8 @@
 // $Id$
 
 /**
- * @file Rules Optimization class and class for decision tree.
+ * @file
+ * Rules Optimization class and class for decision tree.
  */
 
 /**
@@ -12,6 +13,7 @@ class TreeNode extends RulesPlugin implements RulesActionInterface {
 
   public $data;
   public $isLeaf;
+  // Variable $children contains left and right child and at leaves it contains actions to be executed.
   public $children;
 
   function __construct() {
@@ -20,21 +22,28 @@ class TreeNode extends RulesPlugin implements RulesActionInterface {
     $this->children = array('left' => NULL, 'right' => NULL);
   }
 
+  /**
+   * Overrides default evaluate method.
+   */
   public function evaluate(RulesState $state) {
-    $this->evaluateCondition ($this, $state);
+    // $this is passed as parameter to make recursion possible.
+    $this->evaluateCondition($this, $state);
   }
 
   public function evaluateCondition($node, $state) {
     if ($node->isLeaf) {
+      // It is a leaf evaluate all children as actions.
       foreach ($node->children as $action) {
         $action->evaluate($state);
       }
     }
     else {
       if ($node->data->evaluate($state)) {
+        // Condition is evaluated TRUE, go left in tree.
         $this->evaluateCondition($node->children['left'], $state);
       }
       else {
+        // Condition is evaluated FALSE, go right in tree.
         $this->evaluateCondition($node->children['right'], $state);
       }
     }
@@ -51,10 +60,11 @@ class TreeNode extends RulesPlugin implements RulesActionInterface {
 class RulesOptimization extends FacesExtender implements RulesOptimizationInterface {
 
   /**
-   * Implementation of optimize method.
+   * Overrides the default optimization method.
    */
   public function optimize() {
 
+    // Root of the tree.
     $tree = new TreeNode;
     $conditions = array();
     $allCondition = array();
@@ -64,11 +74,15 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     foreach ($rules as $rule) {
       $newConditions = rules_and();
       if ($rule->conditions() != NULL) {
+        // Arrange all the conditions of rule in AND form because ->conditions() returns children of condition.
         foreach ($rule->conditions() as $condition) {
           $newConditions->condition($condition);
         }
+        // Convert conditions for insertion in decision tree.
         $newConditions = $this->convertRuleConditions($newConditions);
+        // All element of $newCondition contains all the conditions of rule. So first element is choosen for getting all conditions.
         $this->getAllCondition($this->arrayCopy($newConditions[0]), $allCondition);
+        // Put the rule at the end of each array of $newCondition. So that it would be easy to get that condition is of which rule.
         foreach ($newConditions as $key => $nc) {
           array_push($newConditions[$key], $rule);
         }
@@ -80,6 +94,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $tree = $this->insertRuleConditions($conditions, $allCondition);
     }
 
+    // Remove all the children of $event so that decision tree would be set as child of $event for optimization to trigger.
     $flag = 1;
     while ($flag) {
       $flag = 0;
@@ -89,17 +104,25 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       }
     }
     RulesLog::logger()->checkLog();
+    // Make decision tree as the only child of $event.
     $event->rule($tree->children['left']);
   }
 
   /**
    * Conerts the input rule conditions to make them suitable for insertion in decision tree.
+   *
+   * @param $condition
+   *   Condition for preprocessing before insertion.
+   *
+   * @return
+   *   Array of arrays where each array would be in AND form, if any one is evaluated to TRUE then action should be triggered.
    */
   public function convertRuleConditions($condition) {
 
     $conditions = array(array($condition));
     $flag = 1;
     while ($flag) {
+      // While there is some change in $conditions, repeat conversion again.
       $this->convert($conditions, $flag);
     }
     return $conditions;
@@ -116,26 +139,31 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
 
     foreach ($auxConditions as $key => $conditionArr) {
       $conditionCount = 0;
-      foreach ($conditionArr as $condition) {
 
+      foreach ($conditionArr as $condition) {
         if ($condition instanceof RulesAND) {
           if (sizeof($condition->getIterator()) == 0) {
+            // AND contains no condition, remove it from the array.
             array_splice($conditions[$key], $conditionCount, 1);
             $flag = 1;
             return;
           }
+          // Else convert AND and place the returned array in place of AND.
           array_splice($conditions[$key], $conditionCount, 1, $this->convertAND($condition));
           $flag = 1;
           return;
         }
         elseif ($condition instanceof RulesOR) {
           if (sizeof($condition->getIterator()) == 0) {
+            // OR contains no condition, remove it from the array.
             array_splice($conditions[$key], $conditionCount, 1);
             $flag = 1;
             return;
           }
           $convertedORArray = $this->convertOR($condition);
+          // $convertedORArray is array of arrays, so it can't just replace OR like AND.
           $auxArr = array();
+          // Put each array of $convertedORArray in place of OR.
           foreach ($convertedORArray as $arr) {
             $auxConditionArr = $conditions[$key];
             array_splice($auxConditionArr, $conditionCount, 1, $arr);
@@ -153,9 +181,18 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Converts the AND in the condition.
+   * Converts RulesAND in the condition so that get the same logic in AND form. This is the case when AND is negated.
+   *
+   * @param $condition
+   *   This is an instance of RulesAND and its children are related in AND form.
+   *
+   * @return
+   *   Array containing conditions in AND form.
+   *
+   * @see RulesAND.
    */
   public function convertAND($condition) {
+    // AND is negated, convert it into OR and change negation sign of all the children. Simple logic.
     if ($condition->isNegated()) {
       $newCondition = rules_or();
       foreach ($condition->getIterator() as $child) {
@@ -170,50 +207,80 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Converts RulesOR in the condition.
+   * Converts RulesOR in the condition so that get the same logic in AND form.
+   *
+   * @param $condition
+   *   This is an instance of RulesOR and its children are related in OR form.
+   *
    * @return
-   *   Array of arrays containing conditions in OR form.
+   *   Array of arrays containing conditions in AND form.
+   *
+   * @see RulesOR.
    */
   public function convertOR($condition) {
     if ($condition->isNegated()) {
+      // OR is negated, convert it into AND and change negation sign of all the children. Simple logic.
       $newCondition = rules_and();
       foreach ($condition->getIterator() as $child) {
         $child->isNegated()?$child->negate(FALSE):$child->negate(TRUE);
         $newCondition->condition($child);
       }
+      // Return array of arrays to be as per the specification.
       return array(array($newCondition));
     }
     else {
       $newConditionArr = array();
       $array = array();
       $conditionCount = 0;
+
       foreach ($condition->getIterator() as $child) {
-        $child->isNegated()?$child->negate(FALSE):$child->negate(TRUE);
         $array[$conditionCount++] = $child;
       }
-      for ($count = 0; $count < $conditionCount; $count++) {
-        $newConditionArr[$count] = $this->arrayCopy($array);
-        $newConditionArr[$count][$count]->isNegated()?$newConditionArr[$count][$count]->negate(FALSE):$newConditionArr[$count][$count]->negate(TRUE);
+      // Get all the permutations except which have all negated conditions.
+      $totPermutation = pow(2, $conditionCount) - 1;
+      for ($count = 0; $count < $totPermutation; $count++) {
+        $newCondition = $this->arrayCopy($array);
+        $binary = base_convert($count, 10, 2);
+        $size = strlen($binary);
+        for ($bitNo = $size - 1, $conditionNo = $conditionCount - 1; $bitNo >= 0; $bitNo--, $conditionNo--) {
+          if ($binary[$bitNo]) {
+            $newCondition[$conditionNo]->isNegated()?$newCondition[$conditionNo]->negate(FALSE):$newCondition[$conditionNo]->negate(TRUE);
+          }
+        }
+        $newConditionArr[$count] = $newCondition;
       }
+      return $newConditionArr;
     }
-    return $newConditionArr;
   }
 
   /**
    * Inserts the converted conditions and corresponding rule in the decision tree.
+   *
+   * @param $conditions
+   *   An array containing last element as rule and remaining array is all the conditions of rule in AND form.
+   * @param $allCondition
+   *   All different conditions in the rule set or event set.
+   *
+   * @see getAllCondition()
    */
   public function insertRuleConditions($conditions, $allCondition) {
 
+    // Root of the decision tree, which would be empty and actual tree would be left child of this node.
     $root = new TreeNode;
+    // A dummy node which is the left child of root.
     $dummy = new TreeNode;
     $dummy->isLeaf = TRUE;
     $dummy->children = array();
     $root->children['left'] = $dummy;
 
     foreach ($conditions as $conditionArr) {
+      // Get the rule.
       $rule = end($conditionArr);
+      // Remaining array have conditions.
       array_splice($conditionArr, sizeof($conditionArr) - 1);
+      // First arrange the $conditionArr for insertion in decision tree.
       $this->sortConditionArr($conditionArr, $allCondition);
+      // Insert the sorted $conditionArr in decision tree.
       $this->insert($root, $conditionArr, $allCondition, $rule);
     }
     $this->traceTree($root->children['left'], 0);
@@ -221,13 +288,24 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Sort the input condition array as the allCondition array.
+   * Sort the $conditionArr array according the $allCondition array. Because in decision tree there should
+   * be some order of conditions to check for equality and non equality. After sorting $conditionArr would
+   * have same keys as that of $allCondition array and values would be the direction.
+   *
+   * @param $conditionArr
+   *   Array of conditions which is to be sorted.
+   * @param $allCondition
+   *   Array of all the different conditions in rule set or event set.
+   *
+   * @see getAllCondition()
    */
   public function sortConditionArr(&$conditionArr, $allCondition) {
 
+    // Temprory array which would be reassigned as $conditionArr.
     $auxConditionArr = array();
     $size = sizeof($allCondition);
 
+    // Array of flags initialized to all zeros. If conditions match corresponding flag would be set.
     for ($count = 0; $count < $size; $count++) {
       $flag[$count] = 0;
     }
@@ -235,7 +313,9 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       if ($flag[$count] == 0) {
         foreach ($conditionArr as $c) {
           if ($allCondition[$count]->getElementName() == $c->getElementName() && $allCondition[$count]->settings == $c->settings) {
+            // Conditions matched and flag was zero. Set the flag.
             $flag[$count] = 1;
+            // If condition is negated then left branch would be taken, so set the corresponding $auxConditionArr value to LEFT otherwise RIGHT.
             $auxConditionArr[$count] = $c->isNegated()?'RIGHT':'LEFT';
             break;
           }
@@ -243,6 +323,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       }
     }
 
+    // For all the conditions in $allCondition which were not matched with any condition in $conditionArr, set value of $auxConditionArr as BOTH.
     for ($count = 0; $count < $size; $count++) {
       if (!$flag[$count]) {
         $auxConditionArr[$count] = 'BOTH';
@@ -252,43 +333,71 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Invoked by insertRuleConditions to insert individual rule conditions.
+   * Invoked by insertRuleConditions to insert individual rule conditions in the decision tree.
+   *
+   * @param $root
+   *   Root of the decision tree in which conditions would be inserted.
+   * @param $conditions
+   *   Array of conditions which are referenced by $allConditions.
+   * @param $allCondition
+   *   Array of all the different conditions in rule set or event set.
+   * @param $rule
+   *   Rule which would be fired if $conditions is evaluated to be TRUE.
+   *
+   * @see getAllCondition()
+   * @see sortConditionArr()
    */
   public function insert(&$root, $conditions, $allCondition, $rule) {
 
+    /**
+     * An array of arrays. In which deeper arrays contain two elements, first is the direction and
+     * second is the last node in decision tree, whose direction side next node would be inserted.
+     *
+     * @see sortConditionArr()
+     */
     $prevArr = array(array(0 => 'LEFT', 1 => $root));
     $arrSize = sizeof($allCondition);
 
     for ($key = 0; $key < $arrSize; $key++) {
       $condition = $allCondition[$key];
+      // @see sortConditionArr()
       $direction = $conditions[$key];
+      // This array would be created in this pass, which would be $prevArr in next pass. Initialized as empty.
       $auxArr = array();
 
       foreach ($prevArr as $arr) {
         $prevDirection = $arr[0];
         $prevNode = $arr[1];
+        // Node where $conditio is to be inserted.
         $node = $prevDirection == 'LEFT'?$prevNode->children['left']:$prevNode->children['right'];
 
+        // If node is a leaf or $condition and condition of $node doesn't match that means we need new node for condition to be inserted.
         if ($node->isLeaf == TRUE || ($condition->getElementName() != $node->data->getElementName() && $condition->settings == $node->settings)) {
+          // If direction is BOTH that means it doesn't effect if this condition is left. Checking this makes the tree size smaller.
           if ($direction != 'BOTH') {
             $newNode = new TreeNode;
             $newNode->data = $condition;
             $newNode->children['left'] = $node;
             $newNode->children['right'] = $this->treeCopy($node);;
+
             if ($prevDirection == 'LEFT') {
               $prevNode->children['left'] = $newNode;
             }
             else {
               $prevNode->children['right'] = $newNode;
             }
+            // Append the newly created node and $direction in $auxArr.
             array_push($auxArr, array(0 => $direction, 1 => $newNode));
           }
           else {
+            // Direction is BOTH, so the $prevDirection and $prevNode need to be preserved.
             array_push($auxArr, array(0 => $prevDirection, 1 => $prevNode));
           }
         }
         else {
+          // It is a leaf node or $condition and condition of $node matched. So tree can proceed from current node.
           if ($direction == 'BOTH') {
+            // Next condition would be inserted in both directions of the tree.
             array_push($auxArr, array(0 => 'LEFT', 1 => $node), array(0 => 'RIGHT', 1 => $node));
           }
           elseif ($direction == 'LEFT') {
@@ -300,17 +409,26 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         }
       }
       $size = sizeof($auxArr);
-      for ($count = 0; $count < $size; $count++)
+      // Copy $auxArr to $prevArr for next iteration.
+      for ($count = 0; $count < $size; $count++) {
         $prevArr[$count] = $auxArr[$count];
+      }
     }
     foreach ($prevArr as $arr) {
+      // All conditions are added in decision tree, now add the actions to all the leaves accessible by last condition node.
       $node = $arr[0] == 'LEFT'?$arr[1]->children['left']:$arr[1]->children['right'];
       $this->addRule($node, $rule);
     }
   }
 
   /**
-   * Returns the exact copy of the input tree.
+   * Recursively goes through the tree and copy all the properties.
+   *
+   * @param $tree
+   *   Node, whose left, right subtrees and leaves to be copied.
+   *
+   * @return
+   *   Copy of the $tree.
    */
   public function treeCopy($tree) {
 
@@ -319,12 +437,14 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     $root->isLeaf = $tree->isLeaf;
 
     if ($root->isLeaf) {
+      // It is a leaf node, contains array of actions instead of left and right child.
       $root->children = array();
       foreach ($tree->children as $child) {
         array_push($root->children, $child);
       }
     }
     else {
+      // Recursively build the tree.
       if ($tree->children['left'] != NULL) {
         $root->children['left'] = $this->treeCopy($tree->children['left']);
       }
@@ -336,36 +456,50 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Append the new conditions of input temp to allCondition.
+   * Converts $allCondition such that if any condition that is in $conditionArr and not in $allCondition it is appended to $allCondition. All
+   * conditions in $allCondition need to be non negated. In decision tree it doesn't matter because if it is TRUE left branch is taken otherwise
+   * right branch.
+   *
+   * @param $conditionArr
+   *   Array of conditions, which is to be checked for new possible conditions that are not in $allCondition.
+   * @param $allCondition
+   *   Array containing all the different conditions in decision tree (i.e. maximum set of conditions).
    */
   public function getAllCondition($conditionArr, &$allCondition) {
 
     $size = sizeof($allCondition);
     $nonNegatedConditions = array();
 
+    // Converts all the conditions of $conditionArr to non negated for comparision.
     foreach ($conditionArr as $condition) {
       array_push($nonNegatedConditions, $condition->isNegated()?$condition->negate(FALSE):$condition);
     }
+    // An array of flags initialized all zeros. If there is a match flag would be set.
     for ($count = 0; $count < $size; $count++) {
       $flag[$count] = 0;
     }
     foreach ($nonNegatedConditions as $condition) {
       $found = 0;
       for ($count = 0; $count < $size; $count++) {
+        // Compares conditions from $conditionArr and $allCondition if $flag is zero.
         if ($flag[$count] == 0 && $allCondition[$count]->getElementName() == $condition->getElementName() && $allCondition[$count]->settings == $condition->settings) {
           $flag[$count] = 1;
           $found = 1;
         }
       }
       if (!$found) {
+        // No match found: append $condition to $allCondition.
         array_push($allCondition, $condition);
       }
     }
-    return $allCondition;
   }
 
   /**
-   * Return the copy of the input array.
+   * @param $array
+   *   Array to be copied.
+   *
+   * @return
+   *   The deep copy of the $array.
    */
   public function arrayCopy($array) {
 
@@ -388,22 +522,32 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Add the input rule at the leaves accessible by input node.
+   * Add the actions at the leaves accessible by input node.
+   *
+   * @param $rule
+   *   The rule, whose actions are to be inserted.
    */
   public function addRule(&$node, $rule) {
     if ($node->isLeaf) {
+      // It is a leaf node append all the actions in the children array.
       foreach ($rule->actions() as $action) {
         array_push($node->children, $action);
       }
     }
     else {
+      // Recursively add the actions in left and right subtree.
       $this->addRule($node->children['left'], $rule);
       $this->addRule($node->children['right'], $rule);
     }
   }
 
   /**
-   * Traces whole the tree and logs it.
+   * Recursively traces whole the tree and logs it.
+   *
+   * @param $root
+   *   Root of the tree or subtree to be traced.
+   * @param $level
+   *   Level of the $root in tree.
    */
   public function traceTree($root, $level) {
     if ($root->isLeaf) {
