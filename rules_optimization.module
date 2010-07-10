@@ -311,16 +311,14 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     for ($count = 0; $count < $size; $count++) {
       $flag[$count] = 0;
     }
-    for ($count = 0; $count < $size; $count++) {
-      if ($flag[$count] == 0) {
-        foreach ($conditionArr as $c) {
-          if ($allCondition[$count]->getElementName() == $c->getElementName() && $allCondition[$count]->settings == $c->settings) {
-            // Conditions matched and flag was zero. Set the flag.
-            $flag[$count] = 1;
-            // If condition is negated then left branch would be taken, so set the corresponding $auxConditionArr value to LEFT otherwise RIGHT.
-            $auxConditionArr[$count] = $c->isNegated()?'RIGHT':'LEFT';
-            break;
-          }
+    foreach ($conditionArr as $c) {
+      for ($count = 0; $count < $size; $count++) {
+        if ($flag[$count] == 0 && $allCondition[$count]->getElementName() == $c->getElementName() && $allCondition[$count]->settings == $c->settings) {
+          // Conditions matched and flag was zero. Set the flag.
+          $flag[$count] = 1;
+          // If condition is negated then left branch would be taken, so set the corresponding $auxConditionArr value to LEFT otherwise RIGHT.
+          $auxConditionArr[$count] = $c->isNegated()?'RIGHT':'LEFT';
+          break;
         }
       }
     }
