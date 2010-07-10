@@ -13,7 +13,7 @@ class TreeNode extends RulesPlugin implements RulesActionInterface {
 
   public $data;
   public $isLeaf;
-  // Variable $children contains left and right child and at leaves it contains actions to be executed.
+  // Variable $children contains left and right child and at leaves it contains all the actions to be executed.
   public $children;
 
   function __construct() {
@@ -240,12 +240,15 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $totPermutation = pow(2, $conditionCount) - 1;
       for ($count = 0; $count < $totPermutation; $count++) {
         $newCondition = $this->arrayCopy($array);
+        // Binary numbers would give all permutations.
         $binary = base_convert($count, 10, 2);
         $size = strlen($binary);
         for ($bitNo = $size - 1, $conditionNo = $conditionCount - 1; $bitNo >= 0; $bitNo--, $conditionNo--) {
           if ($binary[$bitNo]) {
+            // Bit is set, change the sign of negation.
             $newCondition[$conditionNo]->isNegated()?$newCondition[$conditionNo]->negate(FALSE):$newCondition[$conditionNo]->negate(TRUE);
           }
+          // Bit is zero, do nothing.
         }
         $newConditionArr[$count] = $newCondition;
       }
@@ -288,9 +291,8 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Sort the $conditionArr array according the $allCondition array. Because in decision tree there should
-   * be some order of conditions to check for equality and non equality. After sorting $conditionArr would
-   * have same keys as that of $allCondition array and values would be the direction.
+   * Sort the $conditionArr according the $allCondition array. After sorting $conditionArr would have same keys as that of $allCondition array
+   * and values would be the direction.
    *
    * @param $conditionArr
    *   Array of conditions which is to be sorted.
@@ -350,8 +352,8 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   public function insert(&$root, $conditions, $allCondition, $rule) {
 
     /**
-     * An array of arrays. In which deeper arrays contain two elements, first is the direction and
-     * second is the last node in decision tree, whose direction side next node would be inserted.
+     * An array of arrays. In which deeper arrays contain two elements, first is the direction and second is the last node in decision tree,
+     * whose direction side next node would be inserted.
      *
      * @see sortConditionArr()
      */
@@ -456,8 +458,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
 
   /**
    * Converts $allCondition such that if any condition that is in $conditionArr and not in $allCondition it is appended to $allCondition. All
-   * conditions in $allCondition need to be non negated. In decision tree it doesn't matter because if it is TRUE left branch is taken otherwise
-   * right branch.
+   * conditions in $allCondition need to be non negated.
    *
    * @param $conditionArr
    *   Array of conditions, which is to be checked for new possible conditions that are not in $allCondition.
@@ -484,6 +485,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         if ($flag[$count] == 0 && $allCondition[$count]->getElementName() == $condition->getElementName() && $allCondition[$count]->settings == $condition->settings) {
           $flag[$count] = 1;
           $found = 1;
+          break;
         }
       }
       if (!$found) {
