@@ -1,0 +1,7 @@
+; $Id$
+name = "Rules Optimization Tests"
+description = "Support module for the Rules Optimization tests."
+package = Testing
+version = VERSION
+core = 7.x
+hidden = TRUE

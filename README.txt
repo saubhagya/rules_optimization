@@ -1,4 +1,4 @@
-$Id$
+$Id: README.txt,v 1.1 2010/07/10 11:37:44 saubhagya Exp $
 
 Rules is an important module for administrator to defining condition based actions, 
 besides this it is used by several other modules. So the performance of this module 
