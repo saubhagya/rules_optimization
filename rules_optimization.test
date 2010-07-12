@@ -1,0 +1,146 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Rules Optimization tests.
+ */
+
+/**
+ * Tests optimized event set.
+ */
+class RulesOptimizationTestCase extends DrupalWebTestCase {
+
+  static function getInfo() {
+    return array(
+      'name' => 'Rules Optimization tests',
+      'description' => 'Test of optimized event set using rules API.',
+      'group' => 'Rules',
+    );
+  }
+
+  function setUp() {
+    parent::setUp('rules', 'entity_metadata', 'rules_optimization');
+    RulesLog::logger()->clear();
+  }
+
+  /**
+   * Calculates the output of t() given an array of placeholders to replace.
+   */
+  static function t($text, $strings) {
+    $placeholders = array();
+    foreach ($strings as $string) {
+      $placeholders['%' . $string] = drupal_placeholder(array('text' => $string));
+    }
+    return strtr($text, $placeholders);
+  }
+
+  /**
+   * Generates an event set, which has five rules and overlapping conditions. Actions of all these rules are messages.
+   *
+   * @return
+   *   Array of rules.
+   */
+  protected function createTestEventSet() {
+    $rule = rules_reaction_rule();
+    $rule->event('node_presave')
+         ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page'))
+         ->condition(rules_or()
+           ->condition(rules_condition('data_is', array('data:select' => 'node:status', 'value' => TRUE))->negate())
+           ->condition('data_is', array('data:select' => 'node:sticky', 'value' => TRUE))
+         );
+    $rule->action('php_eval', array('code' => 'drupal_set_message("Action 1");'));
+
+    // Initialize return array.
+    $rules = array($rule);
+
+    $rule = rules_reaction_rule();
+    $rule->event('node_presave')
+         ->condition(rules_or()
+           ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page'))
+           ->condition(rules_condition('data_is', array('data:select' => 'node:status', 'value' => TRUE))->negate())
+           ->condition('data_is', array('data:select' => 'node:promote', 'value' => TRUE))
+         );
+    $rule->action('php_eval', array('code' => 'drupal_set_message("Action 2");'));
+
+    // Push the newly created rule in array.
+    array_push($rules, $rule);
+
+    $rule = rules_reaction_rule();
+    $rule->event('node_presave')
+         ->condition('php_eval', array('code' => 'return drupal_set_message("test", "test") || TRUE;'))
+         ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page'))
+         ->condition('data_is', array('data:select' => 'node:promote', 'value' => TRUE));
+    $rule->action('php_eval', array('code' => 'drupal_set_message("Action 3");'));
+
+    array_push($rules, $rule);
+
+    $rule = rules_reaction_rule();
+    $rule->event('node_presave')
+         ->condition(rules_or()
+           ->condition('data_is', array('data:select' => 'node:sticky', 'value' => TRUE))
+           ->condition(rules_and()
+             ->condition('data_is', array('data:select' => 'node:promote', 'value' => TRUE))
+             ->condition('php_eval', array('code' => 'return FALSE;'))
+           )
+           ->negate()
+         );
+    $rule->action('php_eval', array('code' => 'drupal_set_message("Action 4");'));
+
+    array_push($rules, $rule);
+
+    $rule = rules_reaction_rule();
+    $rule->event('node_presave')
+         ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page'))
+         ->condition(rules_or()
+           ->condition('data_is', array('data:select' => 'node:status', 'value' => TRUE))
+           ->condition(rules_and()
+             ->condition(rules_condition('data_is', array('data:select' => 'node:sticky', 'value' => TRUE))->negate())
+             ->condition(rules_condition('php_eval', array('code' => 'return drupal_set_message("test", "test") || TRUE;'))->negate())
+           )
+         );
+    $rule->action('php_eval', array('code' => 'drupal_set_message("Action 5");'));
+
+    array_push($rules, $rule);
+    return $rules;
+  }
+
+  function testOptimizedEventSet() {
+    // Creates a new node of page type.
+    $node = $this->drupalCreateNode(array('type' => 'page'));
+    $rules = $this->createTestEventSet();
+    foreach ($rules as $rule)
+      $rule->save();
+
+    // Force immediate cache clearing
+    rules_clear_cache(TRUE);
+
+    $node->status = 1;
+    $node->sticky = 0;
+    $node->promote = 0;
+    // Triggers the event set.
+    node_save($node);
+
+    $text = RulesLog::logger()->render();
+
+    // Counts the number of occurence of specified nodes in tree.
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node:promote" ], "value" : true } } at level %3', array('{ "data_is" : { "data" : [ "node:promote" ], "value" : true } }','3'));
+    $count1 = substr_count($text, $msg);
+
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node:sticky" ], "value" : true } } at level %2', array('{ "data_is" : { "data" : [ "node:sticky" ], "value" : true } }','2'));
+    $count2 = substr_count($text, $msg);
+
+    $msg = RulesOptimizationTestCase::t('Condition %{ "php_eval" : { "code" : "return FALSE;" } } at level %5', array('{ "php_eval" : { "code" : "return FALSE;" } }','5'));
+    $count3 = substr_count($text, $msg);
+
+    // Check the number of occurence.
+    $this->assertTrue($count1 == 8 && $count2 == 4 && $count3 == 8, 'Tree structure is correct.');
+
+    $msg = drupal_get_messages();
+    // Check that the condition which is at two places in event set is invoked only once.
+    $this->assertTrue(sizeof($msg['test']) == 1 && $msg['test'][0] == 'test', 'Same Condition was triggered only once.');
+    // Check that the right actions are triggered according to conditions specified.
+    $this->assertTrue($msg['status'][0] == 'Action 2' && $msg['status'][1] == 'Action 4' && $msg['status'][2] == 'Action 5', "Rules were triggered succesfully.");
+    RulesLog::logger()->checkLog();
+  }
+}
