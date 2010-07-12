@@ -371,7 +371,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         $node = $prevDirection == 'LEFT'?$prevNode->children['left']:$prevNode->children['right'];
 
         // If node is a leaf or $condition and condition of $node doesn't match that means we need new node for condition to be inserted.
-        if ($node->isLeaf == TRUE || ($condition->getElementName() != $node->data->getElementName() && $condition->settings == $node->settings)) {
+        if ($node->isLeaf == TRUE || $condition->getElementName() != $node->data->getElementName() || $condition->settings != $node->data->settings) {
           // If direction is BOTH that means it doesn't effect if this condition is left. Checking this makes the tree size smaller.
           if ($direction != 'BOTH') {
             $newNode = new TreeNode;
