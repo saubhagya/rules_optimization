@@ -20,7 +20,7 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
   }
 
   function setUp() {
-    parent::setUp('rules', 'entity_metadata', 'rules_optimization');
+    parent::setUp('rules', 'entity_metadata', 'rules_optimization', 'php');
     RulesLog::logger()->clear();
   }
 
@@ -110,7 +110,7 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     $node = $this->drupalCreateNode(array('type' => 'page'));
     $rules = $this->createTestEventSet();
     foreach ($rules as $rule)
-      $rule->save();
+      $rule->integrityCheck()->save();
 
     // Force immediate cache clearing
     rules_clear_cache(TRUE);
@@ -140,7 +140,7 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     // Check that the condition which is at two places in event set is invoked only once.
     $this->assertTrue(sizeof($msg['test']) == 1 && $msg['test'][0] == 'test', 'Same Condition was triggered only once.');
     // Check that the right actions are triggered according to conditions specified.
-    $this->assertTrue($msg['status'][0] == 'Action 2' && $msg['status'][1] == 'Action 4' && $msg['status'][2] == 'Action 5', "Rules were triggered succesfully.");
+    $this->assertTrue($msg['status'][1] == 'Action 2' && $msg['status'][2] == 'Action 4' && $msg['status'][3] == 'Action 5', "Rules were triggered succesfully.");
     RulesLog::logger()->checkLog();
   }
 }
