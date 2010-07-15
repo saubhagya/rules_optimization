@@ -87,21 +87,16 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     $event = $this->getExtendable();
 
     foreach ($event as $rule) {
-      $newConditions = rules_and();
       if ($rule->conditions() != NULL) {
-        // Arrange all the conditions of rule in AND form because ->conditions() returns children of condition.
-        foreach ($rule->conditions() as $condition) {
-          $newConditions->condition($condition);
-        }
         // Convert conditions for insertion in decision tree.
-        $newConditions = $this->convertRuleConditions($newConditions);
-        // All element of $newCondition contains all the conditions of rule. So first element is choosen for getting all conditions.
-        $this->getAllCondition($this->arrayClone($newConditions[0]), $allCondition);
-        // Put the rule at the end of each array of $newCondition. So that it would be easy to get that condition is of which rule.
-        foreach ($newConditions as $key => $nc) {
-          array_push($newConditions[$key], $rule);
+        $convertedConditions = $this->convertRuleConditions((array) $rule->conditions());
+        // All element of $convertedConditions contains all the conditions of rule. So first element is choosen for getting all conditions.
+        $this->getAllCondition($this->arrayClone($convertedConditions[0]), $allCondition);
+        // Put the rule at the end of each array of $convertedConditions. So that it would be easy to get that condition is of which rule.
+        foreach ($convertedConditions as $key => $condition) {
+          array_push($convertedConditions[$key], $rule);
         }
-        $conditions = array_merge($conditions, $newConditions);
+        $conditions = array_merge($conditions, $convertedConditions);
       }
     }
 
@@ -132,15 +127,15 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * @return
    *   Array of arrays where each array would be in AND form, if any one is evaluated to TRUE then action should be triggered.
    */
-  protected function convertRuleConditions($condition) {
+  protected function convertRuleConditions($conditions) {
 
-    $conditions = array(array($condition));
+    $convertedConditions = array($conditions);
     $flag = 1;
     while ($flag) {
       // While there is some change in $conditions, repeat conversion again.
-      $this->convert($conditions, $flag);
+      $this->convert($convertedConditions, $flag);
     }
-    return $conditions;
+    return $convertedConditions;
   }
 
   /**
