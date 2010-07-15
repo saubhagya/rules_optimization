@@ -53,6 +53,16 @@ class RulesOptimizationTreeNode extends RulesPlugin implements RulesActionInterf
       }
     }
   }
+  
+  public function integrityCheck() {
+    if (isset($this->conditionData)) {
+      return $this->conditionData->integrityCheck();
+    }
+    foreach ($this->leafActions as $action) {
+      $this->leafActions->integrityCheck();
+    }
+    return $this;
+  }
 
   /**
    * @return
@@ -84,10 +94,11 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     $tree = new RulesOptimizationTreeNode;
     $conditions = array();
     $allCondition = array();
+    $nonOptimizedRules = array();
     $event = $this->getExtendable();
 
     foreach ($event as $rule) {
-      if ($rule->conditions() != NULL) {
+      if ($rule->integrityCheck() && $rule->conditions() != NULL) {
         // Convert conditions for insertion in decision tree.
         $convertedConditions = $this->convertRuleConditions((array) $rule->conditions());
         // All element of $convertedConditions contains all the conditions of rule. So first element is choosen for getting all conditions.
@@ -98,28 +109,33 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         }
         $conditions = array_merge($conditions, $convertedConditions);
       }
+      else {
+        array_push($nonOptimizedRules, $rule);
+      }
     }
 
     if (!empty($allCondition)) {
       $tree = $this->insertRuleConditions($conditions, $allCondition);
-    }
-
-    // Remove all the children of $event so that decision tree would be set as child of $event for optimization to trigger.
-    $flag = 1;
-    while ($flag) {
-      $flag = 0;
-      foreach ($event->getIterator() as $child) {
-        $flag = 1;
-        $child->delete($child);
+      // Remove all the children of $event so that decision tree would be set as child of $event for optimization to trigger.
+      $flag = 1;
+      while ($flag) {
+        $flag = 0;
+        foreach ($event->getIterator() as $child) {
+          $flag = 1;
+          $child->delete($child);
+        }
+      }
+      RulesLog::logger()->checkLog();
+      // Make decision tree as the only child of $event.
+      $event->rule($tree->trueTree);
+      foreach ($nonOptimizedRules as $rule) {
+        $event->rule($rule);
       }
     }
-    RulesLog::logger()->checkLog();
-    // Make decision tree as the only child of $event.
-    $event->rule($tree->trueTree);
   }
 
   /**
-   * Conerts the input rule conditions to make them suitable for insertion in decision tree.
+   * Converts the input rule conditions to make them suitable for insertion in decision tree.
    *
    * @param $condition
    *   Condition for preprocessing before insertion.
