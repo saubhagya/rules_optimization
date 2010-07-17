@@ -56,10 +56,18 @@ class RulesOptimizationTreeNode extends RulesPlugin implements RulesActionInterf
   
   public function integrityCheck() {
     if (isset($this->conditionData)) {
-      return $this->conditionData->integrityCheck();
+      $this->conditionData->integrityCheck();
+      if ($this->trueTree != NULL) {
+        $this->trueTree->integrityCheck();
+      }
+      if ($this->falseTree != NULL) {
+        $this->falseTree->integrityCheck();
+      }
     }
-    foreach ($this->leafActions as $action) {
-      $this->leafActions->integrityCheck();
+    else {
+      foreach ($this->leafActions as $action) {
+        $action->integrityCheck();
+      }
     }
     return $this;
   }
@@ -90,10 +98,9 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    */
   public function optimize() {
 
-    // Root of the tree.
-    $tree = new RulesOptimizationTreeNode;
     $conditions = array();
     $allCondition = array();
+    // Array of rules that can't be optimized.
     $nonOptimizedRules = array();
     $event = $this->getExtendable();
 
@@ -127,7 +134,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       }
       RulesLog::logger()->checkLog();
       // Make decision tree as the only child of $event.
-      $event->rule($tree->trueTree);
+      $event->rule($tree->trueTree->integrityCheck());
       foreach ($nonOptimizedRules as $rule) {
         $event->rule($rule);
       }
