@@ -77,10 +77,7 @@ class RulesOptimizationTreeNode extends RulesPlugin implements RulesActionInterf
    *   TRUE if node is leaf node otherwise FALSE.
    */
   public function isLeaf() {
-    if ($this->trueTree == NULL && $this->falseTree == NULL)
-      return TRUE;
-    else
-      return FALSE;
+    return $this->trueTree == NULL && $this->falseTree == NULL ? TRUE : FALSE;
   }
 
   public function __sleep() {
@@ -100,24 +97,19 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
 
     $conditions = array();
     $allCondition = array();
-    // Array of rules that can't be optimized.
-    $nonOptimizedRules = array();
     $event = $this->getExtendable();
 
     foreach ($event as $rule) {
       if ($rule->integrityCheck() && $rule->conditions() != NULL) {
         // Convert conditions for insertion in decision tree.
         $convertedConditions = $this->convertRuleConditions((array) $rule->conditions());
-        // All element of $convertedConditions contains all the conditions of rule. So first element is choosen for getting all conditions.
+        // Any element of $convertConditions give all conditions in rule.
         $this->getAllCondition($this->arrayClone($convertedConditions[0]), $allCondition);
-        // Put the rule at the end of each array of $convertedConditions. So that it would be easy to get that condition is of which rule.
+        // It would be easy to get that condition is of which rule.
         foreach ($convertedConditions as $key => $condition) {
           array_push($convertedConditions[$key], $rule);
         }
         $conditions = array_merge($conditions, $convertedConditions);
-      }
-      else {
-        array_push($nonOptimizedRules, $rule);
       }
     }
 
@@ -135,9 +127,6 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       RulesLog::logger()->checkLog();
       // Make decision tree as the only child of $event.
       $event->rule($tree->trueTree->integrityCheck());
-      foreach ($nonOptimizedRules as $rule) {
-        $event->rule($rule);
-      }
     }
   }
 
@@ -322,8 +311,8 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Sort the $conditionArr according the $allCondition array. After sorting $conditionArr would have same keys as that of $allCondition array
-   * and values would be the direction.
+   * Sort the $conditionArr according the $allCondition array. After sorting $conditionArr would have 
+   * same keys as that of $allCondition array and values would be the direction.
    *
    * @param $conditionArr
    *   Array of conditions which is to be sorted.
@@ -347,14 +336,14 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         if ($flag[$count] == 0 && $allCondition[$count]->getElementName() == $c->getElementName() && $allCondition[$count]->settings == $c->settings) {
           // Conditions matched and flag was zero. Set the flag.
           $flag[$count] = 1;
-          // If condition is negated then left branch would be taken, so set the corresponding $auxConditionArr value to LEFT otherwise RIGHT.
+          // If condition is negated then left branch would be taken, otherwise RIGHT.
           $auxConditionArr[$count] = $c->isNegated() ? 'RIGHT' : 'LEFT';
           break;
         }
       }
     }
 
-    // For all the conditions in $allCondition which were not matched with any condition in $conditionArr, set value of $auxConditionArr as BOTH.
+    // All conditions in $allCondition that were not matched with any condition in $conditionArr, set value BOTH.
     for ($count = 0; $count < $size; $count++) {
       if (!$flag[$count]) {
         $auxConditionArr[$count] = 'BOTH';
@@ -381,8 +370,8 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   protected function insert(&$root, $conditions, $allCondition, $rule) {
 
     /**
-     * An array of arrays. In which deeper arrays contain two elements, first is the direction and second is the last node in decision tree,
-     * whose direction side next node would be inserted.
+     * An array of arrays. Deeper arrays contain two elements, first is the direction and second is the last 
+     * node in decision tree whose direction side next node would be inserted.
      *
      * @see sortConditionArr()
      */
@@ -392,7 +381,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     for ($key = 0; $key < $arrSize; $key++) {
       $condition = $allCondition[$key];
       $direction = $conditions[$key];
-      // This array would be created in this pass, which would be $prevArr in next pass. Initialized as empty.
+      // This array would be created in this pass, which would be $prevArr in next pass.
       $auxArr = array();
 
       foreach ($prevArr as $arr) {
@@ -401,7 +390,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         // Node where $conditio is to be inserted.
         $node = $prevDirection == 'LEFT' ? $prevNode->trueTree : $prevNode->falseTree;
 
-        // If node is a leaf or $condition and condition of $node doesn't match that means we need new node for condition to be inserted.
+        // If node is a leaf or $condition and condition of $node doesn't match then we need new node for condition to be inserted.
         if ($node->isLeaf() || $condition->getElementName() != $node->conditionData->getElementName() || $condition->settings != $node->conditionData->settings) {
           // If direction is BOTH that means it doesn't effect if this condition is left. Checking this makes the tree size smaller.
           if ($direction != 'BOTH') {
@@ -482,8 +471,8 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Converts $allCondition such that if any condition that is in $conditionArr and not in $allCondition it is appended to $allCondition. All
-   * conditions in $allCondition need to be non negated.
+   * Converts $allCondition such that if any condition that is in $conditionArr and not in $allCondition it is appended to $allCondition.
+   * All conditions in $allCondition need to be non negated.
    *
    * @param $conditionArr
    *   Array of conditions, which is to be checked for new possible conditions that are not in $allCondition.
