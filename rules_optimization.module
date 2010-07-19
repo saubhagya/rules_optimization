@@ -32,7 +32,9 @@ class RulesOptimizationTreeNode extends RulesPlugin implements RulesActionInterf
    */
   public function evaluate(RulesState $state) {
     // $this is passed as parameter to make recursion possible.
-    $this->evaluateCondition($this, $state);
+    if ($this->conditionData != NULL) {
+      $this->evaluateCondition($this, $state);
+    }
   }
 
   protected function evaluateCondition($node, $state) {
@@ -95,6 +97,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    */
   public function optimize() {
 
+    $tree = NULL;
     $conditions = array();
     $allCondition = array();
     $event = $this->getExtendable();
@@ -104,29 +107,37 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         // Convert conditions for insertion in decision tree.
         $convertedConditions = $this->convertRuleConditions((array) $rule->conditions());
         // Any element of $convertConditions give all conditions in rule.
-        $this->getAllCondition($this->arrayClone($convertedConditions[0]), $allCondition);
-        // It would be easy to get that condition is of which rule.
-        foreach ($convertedConditions as $key => $condition) {
-          array_push($convertedConditions[$key], $rule);
+        if (!empty($convertedConditions)) {
+          $this->getAllCondition($this->arrayClone(end($convertedConditions)), $allCondition);
+          // It would be easy to get that condition is of which rule.
+          foreach ($convertedConditions as $key => $condition) {
+            array_push($convertedConditions[$key], $rule);
+          }
+          $conditions = array_merge($conditions, $convertedConditions);
         }
-        $conditions = array_merge($conditions, $convertedConditions);
       }
     }
 
     if (!empty($allCondition)) {
       $tree = $this->insertRuleConditions($conditions, $allCondition);
-      // Remove all the children of $event so that decision tree would be set as child of $event for optimization to trigger.
-      $flag = 1;
-      while ($flag) {
-        $flag = 0;
-        foreach ($event->getIterator() as $child) {
-          $flag = 1;
-          $child->delete($child);
-        }
+    }
+    // Remove all the children of $event so that decision tree would be set as child of $event for optimization to trigger.
+    $flag = 1;
+    while ($flag) {
+      $flag = 0;
+      foreach ($event->getIterator() as $child) {
+        $flag = 1;
+        $child->delete($child);
       }
-      RulesLog::logger()->checkLog();
-      // Make decision tree as the only child of $event.
+    }
+    RulesLog::logger()->checkLog();
+    // Make decision tree as the only child of $event.
+    if ($tree != NULL) {
       $event->rule($tree->trueTree->integrityCheck());
+    }
+    else {
+      $tree = new RulesOptimizationTreeNode;
+      $event->rule($tree);
     }
   }
 
@@ -147,6 +158,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       // While there is some change in $conditions, repeat conversion again.
       $this->convert($convertedConditions, $flag);
     }
+    $this->removeFALSEConditions($convertedConditions);
     return $convertedConditions;
   }
 
@@ -278,6 +290,39 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     }
   }
 
+  protected function removeFALSEConditions(&$convertedConditions) {
+    $auxConvertedConditions = array();
+    foreach ($convertedConditions as $conditions) {
+      array_push($auxConvertedConditions, $this->arrayClone($conditions));
+    }
+    // Condition array count which is to be removed.
+    $count = 0;
+    foreach ($auxConvertedConditions as $conditions) {
+      $flag = 1;
+      $auxConditions = array();
+      foreach ($conditions as $condition) {
+        array_push($auxConditions, $condition);
+      }
+      $size = sizeof($auxConditions);
+      for ($i = 0; $i < $size && $flag; $i++) {
+        for ($j = $i + 1; $j < $size && $flag; $j++) {
+          if ($auxConditions[$i]->getElementName() == 'data_is' && $auxConditions[$j]->getElementName() == 'data_is' && $auxConditions[$i]->isNegated() == $auxConditions[$j]->isNegated()) {
+            $settingsFirst = $auxConditions[$i]->settings;
+            $settingsSecond = $auxConditions[$j]->settings;
+            if (isset($settingsFirst['op']) && isset($settingsSecond['op']) && $settingsFirst['op'] == '==' && $settingsSecond['op'] == '==' && $settingsFirst['data:select'] == $settingsSecond['data:select']) {
+              if ($settingsFirst['value:select'] != $settingsSecond['value:select']) {
+                // If value part is different then this would result FALSE in every condition.
+                $flag = 0;
+                array_splice($convertedConditions, $count, 1);
+                $count--;
+              }
+            }
+          }
+        }
+      }
+      $count++;
+    }
+  }
   /**
    * Inserts the converted conditions and corresponding rule in the decision tree.
    *
