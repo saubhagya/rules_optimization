@@ -290,6 +290,11 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     }
   }
 
+  /**
+   * Removes the rules which would give FALSE output in every case.
+   * @param $convertedConditions
+   *   Array of arrays where deeper arrays are conditions of a single rule in AND form.
+   */
   protected function removeFALSEConditions(&$convertedConditions) {
     $auxConvertedConditions = array();
     foreach ($convertedConditions as $conditions) {
@@ -306,23 +311,35 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $size = sizeof($auxConditions);
       for ($i = 0; $i < $size && $flag; $i++) {
         for ($j = $i + 1; $j < $size && $flag; $j++) {
-          if ($auxConditions[$i]->getElementName() == 'data_is' && $auxConditions[$j]->getElementName() == 'data_is' && $auxConditions[$i]->isNegated() == $auxConditions[$j]->isNegated()) {
-            $settingsFirst = $auxConditions[$i]->settings;
-            $settingsSecond = $auxConditions[$j]->settings;
-            if (isset($settingsFirst['op']) && isset($settingsSecond['op']) && $settingsFirst['op'] == '==' && $settingsSecond['op'] == '==' && $settingsFirst['data:select'] == $settingsSecond['data:select']) {
-              if ($settingsFirst['value:select'] != $settingsSecond['value:select']) {
-                // If value part is different then this would result FALSE in every condition.
-                $flag = 0;
-                array_splice($convertedConditions, $count, 1);
-                $count--;
-              }
-            }
+          if ($this->isEqualType($auxConditions[$i], $auxConditions[$j])) {
+            // If value part is different then this would result FALSE in every condition.
+            $flag = 0;
+            array_splice($convertedConditions, $count, 1);
+            $count--;
           }
         }
       }
       $count++;
     }
   }
+  
+  /**
+   * Compares two conditions to check if they are of equal type or not.
+   * TODO: Check that this function work in every situation.
+   */
+  public function isEqualType($conditionFirst, $conditionSecond) {
+    if ($conditionFirst->getElementName() == 'data_is' && $conditionSecond->getElementName() == 'data_is' && $conditionFirst->isNegated() == $conditionSecond->isNegated()) {
+      $settingsFirst = $conditionFirst->settings;
+      $settingsSecond = $conditionSecond->settings;
+      if (isset($settingsFirst['op']) && isset($settingsSecond['op']) && $settingsFirst['op'] == '==' && $settingsSecond['op'] == '==' && $settingsFirst['data:select'] == $settingsSecond['data:select']) {
+        if (isset($settingsFirst['value:select']) && isset($settingsSecond['value:select']) && $settingsFirst['value:select'] != $settingsSecond['value:select']) {
+          return TRUE;
+        }
+      }
+    }
+    return FALSE;
+  }
+  
   /**
    * Inserts the converted conditions and corresponding rule in the decision tree.
    *
@@ -370,6 +387,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
 
     // Temprory array which would be reassigned as $conditionArr.
     $auxConditionArr = array();
+    $auxAllCondition = $this->arrayClone($allCondition);
     $size = sizeof($allCondition);
 
     // Array of flags initialized to all zeros. If conditions match corresponding flag would be set.
@@ -378,11 +396,19 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     }
     foreach ($conditionArr as $c) {
       for ($count = 0; $count < $size; $count++) {
-        if ($flag[$count] == 0 && $allCondition[$count]->getElementName() == $c->getElementName() && $allCondition[$count]->settings == $c->settings) {
+        if (!$flag[$count] && $allCondition[$count]->getElementName() == $c->getElementName() && $allCondition[$count]->settings == $c->settings) {
           // Conditions matched and flag was zero. Set the flag.
           $flag[$count] = 1;
-          // If condition is negated then left branch would be taken, otherwise RIGHT.
-          $auxConditionArr[$count] = $c->isNegated() ? 'RIGHT' : 'LEFT';
+          // If condition is negated then true branch would be taken, otherwise false.
+          $auxConditionArr[$count] = $c->isNegated() ? 'FALSE' : 'TRUE';
+          if ($c->getElementName() == 'data_is') {
+            for ($auxCount = 0; $auxCount < $count; $auxCount++) {
+              if (!$flag[$auxCount] && $this->isEqualType($c, $allCondition[$auxCount])) {
+                $flag[$auxCount] = 1;
+                $auxConditionArr[$auxCount] = 'FALSE';
+              }
+            }
+          }
           break;
         }
       }
@@ -420,7 +446,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
      *
      * @see sortConditionArr()
      */
-    $prevArr = array(array(0 => 'LEFT', 1 => $root));
+    $prevArr = array(array(0 => 'TRUE', 1 => $root));
     $arrSize = sizeof($allCondition);
 
     for ($key = 0; $key < $arrSize; $key++) {
@@ -433,18 +459,18 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         $prevDirection = $arr[0];
         $prevNode = $arr[1];
         // Node where $conditio is to be inserted.
-        $node = $prevDirection == 'LEFT' ? $prevNode->trueTree : $prevNode->falseTree;
+        $node = $prevDirection == 'TRUE' ? $prevNode->trueTree : $prevNode->falseTree;
 
         // If node is a leaf or $condition and condition of $node doesn't match then we need new node for condition to be inserted.
         if ($node->isLeaf() || $condition->getElementName() != $node->conditionData->getElementName() || $condition->settings != $node->conditionData->settings) {
-          // If direction is BOTH that means it doesn't effect if this condition is left. Checking this makes the tree size smaller.
+          // If direction is BOTH that means it doesn't effect if this condition is true or false. Checking this makes the tree size smaller.
           if ($direction != 'BOTH') {
             $newNode = new RulesOptimizationTreeNode;
             $newNode->conditionData = $condition;
             $newNode->trueTree = $node;
             $newNode->falseTree = $this->treeClone($node);;
 
-            if ($prevDirection == 'LEFT') {
+            if ($prevDirection == 'TRUE') {
               $prevNode->trueTree = $newNode;
             }
             else {
@@ -462,13 +488,13 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
           // It is a leaf node or $condition and condition of $node matched. So tree can proceed from current node.
           if ($direction == 'BOTH') {
             // Next condition would be inserted in both trueTree and flaseTree of the current node.
-            array_push($auxArr, array(0 => 'LEFT', 1 => $node), array(0 => 'RIGHT', 1 => $node));
+            array_push($auxArr, array(0 => 'TRUE', 1 => $node), array(0 => 'FALSE', 1 => $node));
           }
-          elseif ($direction == 'LEFT') {
-            array_push($auxArr, array(0 => 'LEFT', 1 => $node));
+          elseif ($direction == 'TRUE') {
+            array_push($auxArr, array(0 => 'TRUE', 1 => $node));
           }
           else {
-            array_push($auxArr, array(0 => 'RIGHT', 1 => $node));
+            array_push($auxArr, array(0 => 'FALSE', 1 => $node));
           }
         }
       }
@@ -480,7 +506,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     }
     foreach ($prevArr as $arr) {
       // All conditions are added in decision tree, now add the actions to all the leaves accessible by last condition node.
-      $node = $arr[0] == 'LEFT' ? $arr[1]->trueTree : $arr[1]->falseTree;
+      $node = $arr[0] == 'TRUE' ? $arr[1]->trueTree : $arr[1]->falseTree;
       $this->addRule($node, $rule);
     }
   }
@@ -489,7 +515,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    * Recursively goes through the tree and copy all the properties.
    *
    * @param $tree
-   *   Node, whose left, right subtrees and leaves to be copied.
+   *   Node, whose true and false subtrees and leaves to be copied.
    *
    * @return
    *   Copy of the $tree.
