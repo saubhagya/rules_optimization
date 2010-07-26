@@ -143,4 +143,49 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     $this->assertTrue($msg['status'][1] == 'Action 2' && $msg['status'][2] == 'Action 4' && $msg['status'][3] == 'Action 5', "Rules were triggered succesfully.");
     RulesLog::logger()->checkLog(); 
   }
+  
+  function createTestEqualType() {
+    $rule = rules_reaction_rule();
+    $rule->event('node_presave')
+         ->condition('data_is', array('data:select' => 'node:promote', 'value' => TRUE))
+         ->condition('data_is', array('data:select' => 'node', 'value:select' => 'node_unchanged', 'op' => '=='));
+
+    // Initialize return array.
+    $rules = array($rule);
+
+    $rule = rules_reaction_rule();
+    $rule->event('node_presave')
+         ->condition('data_is', array('data:select' => 'node', 'value:select' => 'node', 'op' => '=='));
+
+    // Push the newly created rule in array.
+    array_push($rules, $rule);
+    return $rules;
+  }
+  
+  /**
+   * Tests that equal type of conditions are in false tree only.
+   */
+  function testEqualTypeConditions() {
+    $node = $this->drupalCreateNode(array('type' => 'page'));
+    $rules = $this->createTestEqualType();
+    foreach ($rules as $rule)
+      $rule->save();
+    
+    rules_clear_cache(TRUE);
+    node_save($node);
+
+    $text = RulesLog::logger()->render();
+    // Check the tree structure.
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node:promote" ], "value" : true } } at level %0', array('{ "data_is" : { "data" : [ "node:promote" ], "value" : true } }','0'));
+    $count1 = substr_count($text, $msg);
+    
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node" ], "value" : [ "node_unchanged" ] } } at level %1', array('{ "data_is" : { "data" : [ "node" ], "value" : [ "node_unchanged" ] } }','1'));
+    $count2 = substr_count($text, $msg);
+    
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } } at level %2', array('{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } }','2'));
+    $count3 = substr_count($text, $msg);
+    
+    $this->assertTrue($count1 == 1 && $count2 == 2 && $count3 == 2, 'Equal type of conditions are placed correctly in tree.');
+    RulesLog::logger()->checkLog();
+  }
 }

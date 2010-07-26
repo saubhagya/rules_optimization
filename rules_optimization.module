@@ -401,6 +401,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
           $flag[$count] = 1;
           // If condition is negated then true branch would be taken, otherwise false.
           $auxConditionArr[$count] = $c->isNegated() ? 'FALSE' : 'TRUE';
+          // Search equal type of condition in upper levels of tree to put rest of conditions in false tree of that.
           if ($c->getElementName() == 'data_is') {
             for ($auxCount = 0; $auxCount < $count; $auxCount++) {
               if (!$flag[$auxCount] && $this->isEqualType($c, $allCondition[$auxCount])) {
