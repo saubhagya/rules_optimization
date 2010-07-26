@@ -185,7 +185,10 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } } at level %2', array('{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } }','2'));
     $count3 = substr_count($text, $msg);
     
-    $this->assertTrue($count1 == 1 && $count2 == 2 && $count3 == 2, 'Equal type of conditions are placed correctly in tree.');
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } } at level %1', array('{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } }','1'));
+    $count4 = substr_count($text, $msg);
+    
+    $this->assertTrue($count1 == 1 && $count2 == 1 && $count3 == 1 && $count4 == 1, 'Equal type of conditions are placed correctly in tree.');
     RulesLog::logger()->checkLog();
   }
 }
