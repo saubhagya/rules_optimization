@@ -36,7 +36,8 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
   }
 
   /**
-   * Generates an event set, which has five rules and overlapping conditions. Actions of all these rules are messages.
+   * Generates an event set, which has five rules and overlapping conditions.
+   * Actions of all these rules are messages.
    *
    * @return
    *   Array of rules.
@@ -46,6 +47,7 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     $rule->event('node_presave')
          ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page'))
          ->condition(rules_or()
+           ->condition(rules_or())
            ->condition(rules_condition('data_is', array('data:select' => 'node:status', 'value' => TRUE))->negate())
            ->condition('data_is', array('data:select' => 'node:sticky', 'value' => TRUE))
          );
@@ -69,6 +71,7 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     $rule = rules_reaction_rule();
     $rule->event('node_presave')
          ->condition('php_eval', array('code' => 'return drupal_set_message("test", "test") || TRUE;'))
+         ->condition(rules_and())
          ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page'))
          ->condition('data_is', array('data:select' => 'node:promote', 'value' => TRUE));
     $rule->action('php_eval', array('code' => 'drupal_set_message("Action 3");'));
@@ -124,27 +127,28 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     $text = RulesLog::logger()->render();
 
     // Counts the number of occurence of specified nodes in tree.
-    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node:promote" ], "value" : true } } at level %3', array('{ "data_is" : { "data" : [ "node:promote" ], "value" : true } }','3'));
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node:promote" ], "value" : true } } at level %3', array('{ "data_is" : { "data" : [ "node:promote" ], "value" : true } }', '3'));
     $count1 = substr_count($text, $msg);
 
-    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node:sticky" ], "value" : true } } at level %2', array('{ "data_is" : { "data" : [ "node:sticky" ], "value" : true } }','2'));
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node:sticky" ], "value" : true } } at level %2', array('{ "data_is" : { "data" : [ "node:sticky" ], "value" : true } }', '2'));
     $count2 = substr_count($text, $msg);
 
-    $msg = RulesOptimizationTestCase::t('Condition %{ "php_eval" : { "code" : "return FALSE;" } } at level %5', array('{ "php_eval" : { "code" : "return FALSE;" } }','5'));
+    $msg = RulesOptimizationTestCase::t('Condition %{ "php_eval" : { "code" : "return FALSE;" } } at level %5', array('{ "php_eval" : { "code" : "return FALSE;" } }', '5'));
     $count3 = substr_count($text, $msg);
 
     // Check the number of occurence.
     $this->assertTrue($count1 == 8 && $count2 == 4 && $count3 == 8, 'Tree structure is correct.');
 
     $msg = drupal_get_messages();
-    // Check that the condition which is at two places in event set is invoked only once.
+    // Check that the condition which is at two places in event set
+    // is invoked only once.
     $this->assertTrue(sizeof($msg['test']) == 1 && $msg['test'][0] == 'test', 'Same Condition was triggered only once.');
-    // Check that the right actions are triggered according to conditions specified.
+    // Check that the right actions are triggered according to conditions.
     $this->assertTrue($msg['status'][1] == 'Action 2' && $msg['status'][2] == 'Action 4' && $msg['status'][3] == 'Action 5', "Rules were triggered succesfully.");
-    RulesLog::logger()->checkLog(); 
+    RulesLog::logger()->checkLog();
   }
-  
-  function createTestEqualType() {
+
+  protected function createTestRulesSameType() {
     $rule = rules_reaction_rule();
     $rule->event('node_presave')
          ->condition('data_is', array('data:select' => 'node:promote', 'value' => TRUE))
@@ -161,33 +165,33 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     array_push($rules, $rule);
     return $rules;
   }
-  
+
   /**
-   * Tests that equal type of conditions are in false tree only.
+   * Tests that same type of conditions (not equal) are in false tree only.
    */
-  function testEqualTypeConditions() {
+  function testSameTypeNotEqualConditions() {
     $node = $this->drupalCreateNode(array('type' => 'page'));
-    $rules = $this->createTestEqualType();
+    $rules = $this->createTestRulesSameType();
     foreach ($rules as $rule)
       $rule->save();
-    
+
     rules_clear_cache(TRUE);
     node_save($node);
 
     $text = RulesLog::logger()->render();
     // Check the tree structure.
-    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node:promote" ], "value" : true } } at level %0', array('{ "data_is" : { "data" : [ "node:promote" ], "value" : true } }','0'));
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node:promote" ], "value" : true } } at level %0', array('{ "data_is" : { "data" : [ "node:promote" ], "value" : true } }', '0'));
     $count1 = substr_count($text, $msg);
-    
-    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node" ], "value" : [ "node_unchanged" ] } } at level %1', array('{ "data_is" : { "data" : [ "node" ], "value" : [ "node_unchanged" ] } }','1'));
+
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node" ], "value" : [ "node_unchanged" ] } } at level %1', array('{ "data_is" : { "data" : [ "node" ], "value" : [ "node_unchanged" ] } }', '1'));
     $count2 = substr_count($text, $msg);
-    
-    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } } at level %2', array('{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } }','2'));
+
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } } at level %2', array('{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } }', '2'));
     $count3 = substr_count($text, $msg);
-    
-    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } } at level %1', array('{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } }','1'));
+
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } } at level %1', array('{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } }', '1'));
     $count4 = substr_count($text, $msg);
-    
+
     $this->assertTrue($count1 == 1 && $count2 == 1 && $count3 == 1 && $count4 == 1, 'Equal type of conditions are placed correctly in tree.');
     RulesLog::logger()->checkLog();
   }
