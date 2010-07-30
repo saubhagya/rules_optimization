@@ -195,4 +195,33 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     $this->assertTrue($count1 == 1 && $count2 == 1 && $count3 == 1 && $count4 == 1, 'Equal type of conditions are placed correctly in tree.');
     RulesLog::logger()->checkLog();
   }
+
+  protected function createTestFALSERule() {
+    $rule = rules_reaction_rule();
+    $rule->event('node_presave')
+         ->condition('data_is', array('data:select' => 'node', 'value:select' => 'node', 'op' => '=='))
+         ->condition('data_is', array('data:select' => 'node', 'value:select' => 'node_unchanged', 'op' => '=='))
+         ->condition(rules_or()
+           ->condition('data_is', array('data:select' => 'node:promote', 'value' => TRUE))
+           ->condition('php_eval', array('code' => 'return FALSE;'))
+         );
+    return $rule;
+  }
+
+  function testFALSERule() {
+        $node = $this->drupalCreateNode(array('type' => 'page'));
+    $rule = $this->createTestFALSERule();
+    $rule->save();
+
+    rules_clear_cache(TRUE);
+    node_save($node);
+    $text = RulesLog::logger()->render();
+
+    $msg = RulesOptimizationTestCase::t('Condition %{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } } at level %0', array('{ "data_is" : { "data" : [ "node" ], "value" : [ "node" ] } }', '0'));
+    $count = substr_count($text, $msg);
+
+    $this->assertTrue(!$count, 'FALSE rules are not placed in tree.');
+
+    RulesLog::logger()->checkLog();
+  }
 }
