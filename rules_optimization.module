@@ -165,11 +165,27 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     $tree = NULL;
     $conditions = array();
     $maxConditionSet = array();
-    $rules = $this->getExtendable();
+    $optimizableRules = array();
+    $nonOptimizableRules = array();
     $processedRules = array();
+    $rules = $this->getExtendable();
 
-    foreach ($rules as $rule) {
-      if ($rule->integrityCheck() && $rule->conditions() != NULL) {
+    if ($this->getExtendable() instanceof RulesEventSet) {
+      $optimizableRules = $rules;
+    }
+    elseif ($this->getExtendable() instanceof RulesRuleSet) {
+      foreach ($rules as $rule) {
+        if ($rule->integrityCheck()) {
+          array_push($optimizableRules, $rule);
+        }
+        else {
+          array_push($nonOptimizableRules, $rule);
+        }
+      }
+    }
+
+    foreach ($optimizableRules as $rule) {
+      if ($rule->conditions() != NULL) {
         // Preprocess the rule for insertion in tree.
         $data = $this->preProcessRule($rule);
         if (!empty($data['conditions'])) {
@@ -182,20 +198,20 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
 
     if (!empty($maxConditionSet)) {
       $tree = $this->insertRules($processedRules, $maxConditionSet);
-      $tree->trueTree->integrityCheck();
+      $tree->trueTree->integrityCheck()->logTree(0);
     }
-    // Make $tree as the only child of event.
-    $this->makeOnlyChild($tree);
+    // Make tree and all non optimizable rules as children of event.
+    $this->makeChildren($tree, $nonOptimizableRules);
   }
 
   /**
-   * Removes all children of event and adds the optimized tree as the only
-   * child.
+   * Removes all children of event and adds the optimized tree and non-
+   * optimizable rules as children.
    *
    * @param $tree
    *   Tree which is to be the only child of event.
    */
-  protected function makeOnlyChild($tree) {
+  protected function makeChildren($tree, $nonOptimizableRules) {
 
     $event = $this->getExtendable();
     // Remove all children of $event.
@@ -211,6 +227,10 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     else {
       $tree = new RulesOptimizationTreeNode;
       $event->rule($tree);
+    }
+
+    foreach ($nonOptimizableRules as $rule) {
+      $event->rule($rule);
     }
     RulesLog::logger()->checkLog();
   }
@@ -473,7 +493,6 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
         $this->createTree($root, $conditions, $maxConditionSet, $data['rule']);
       }
     }
-    $root->trueTree->logTree(0);
     return $root;
   }
 
