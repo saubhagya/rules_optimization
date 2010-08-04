@@ -163,7 +163,6 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   public function optimize() {
 
     $tree = NULL;
-    $conditions = array();
     $maxConditionSet = array();
     $optimizableRules = array();
     $nonOptimizableRules = array();
@@ -174,13 +173,13 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $optimizableRules = $rules;
     }
     elseif ($this->getExtendable() instanceof RulesRuleSet) {
-      foreach ($rules as $rule) {
-        if ($rule->integrityCheck()) {
-          array_push($optimizableRules, $rule);
-        }
-        else {
-          array_push($nonOptimizableRules, $rule);
-        }
+      try {
+        $rules->integrityCheck();
+        $optimizableRules = $rules;
+      }
+      catch (RulesException $e) {
+        // Rules fail in integrity check so these can't be optimized.
+        $nonOptimizableRules = $rules;
       }
     }
 
@@ -225,12 +224,13 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $event->rule($tree->trueTree);
     }
     else {
+      // Add NULL tree as child in case non optimized array is empty.
       $tree = new RulesOptimizationTreeNode;
       $event->rule($tree);
-    }
 
-    foreach ($nonOptimizableRules as $rule) {
-      $event->rule($rule);
+      foreach ($nonOptimizableRules as $rule) {
+        $event->rule($rule);
+      }
     }
     RulesLog::logger()->checkLog();
   }
@@ -260,10 +260,10 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       }
     }
     $data['conditions'] = array($data['conditions']);
-    // While there is some change in conditions, repeat conversion again.
+    // While there is conversion in conditions, repeat conversion again.
     while ($this->convert($data['conditions']))
       ;
-    $this->removeFALSERules($data['conditions']);
+    $this->removeFalseRules($data['conditions']);
     $data['rule'] = $rule;
     return $data;
   }
@@ -436,7 +436,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    *   Array of arrays where deeper arrays are conditions of a single rule
    *   in AND form.
    */
-  protected function removeFALSERules(&$convertedConditions) {
+  protected function removeFalseRules(&$convertedConditions) {
     $auxConvertedConditions = array();
     foreach ($convertedConditions as $conditions) {
       array_push($auxConvertedConditions, arrayClone($conditions));
@@ -654,7 +654,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $matchedFlag[$conditionKey] = FALSE;
     }
     foreach ($conditions as $condition) {
-       foreach ($maxConditionSet as $conditionKey => $setCondition) {
+      foreach ($maxConditionSet as $conditionKey => $setCondition) {
         if (!$matchedFlag[$conditionKey] && $setCondition->getElementName() == $condition->getElementName() && $setCondition->settings == $condition->settings) {
           // Conditions matched and flag was zero. Set the flag.
           $matchedFlag[$conditionKey] = TRUE;
