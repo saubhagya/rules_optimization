@@ -20,7 +20,7 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
   }
 
   function setUp() {
-    parent::setUp('rules', 'entity_metadata', 'rules_optimization', 'php');
+    parent::setUp('rules', 'entity_metadata', 'rules_optimization', 'rules_test', 'php');
     RulesLog::logger()->clear();
   }
 
@@ -137,7 +137,7 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     $count3 = substr_count($text, $msg);
 
     // Check the number of occurence.
-    $this->assertTrue($count1 == 8 && $count2 == 4 && $count3 == 8, 'Tree structure is correct.');
+    $this->assertTrue($count1 == 8 && $count2 == 4 && $count3 == 8, 'Event set tree structure is correct.');
 
     $msg = drupal_get_messages();
     // Check that the condition which is at two places in event set
@@ -196,7 +196,7 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     RulesLog::logger()->checkLog();
   }
 
-  protected function createTestFALSERule() {
+  protected function createTestFalseRule() {
     $rule = rules_reaction_rule();
     $rule->event('node_presave')
          ->condition('data_is', array('data:select' => 'node', 'value:select' => 'node', 'op' => '=='))
@@ -208,9 +208,9 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     return $rule;
   }
 
-  function testFALSERule() {
+  function testFalseRule() {
         $node = $this->drupalCreateNode(array('type' => 'page'));
-    $rule = $this->createTestFALSERule();
+    $rule = $this->createTestFalseRule();
     $rule->save();
 
     rules_clear_cache(TRUE);
@@ -221,6 +221,30 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
     $count = substr_count($text, $msg);
 
     $this->assertTrue(!$count, 'FALSE rules are not placed in tree.');
+
+    RulesLog::logger()->checkLog();
+  }
+
+  function testOptimizedRuleSets() {
+    $set = rules_rule_set(array(
+      'node' => array('type' => 'node', 'label' => 'node'),
+    ));
+    $set->rule(rule()->action('drupal_message', array('message:select' => 'node:title')))
+        ->rule(rule()->condition('rules_condition_content_is_published')
+                     ->condition(rules_condition('php_eval', array('code' => 'return TRUE;')))
+                     ->action('drupal_message', array('message' => 'Node is published.'))
+               )
+        ->rule(rule());
+    $set->save('rules_test_set_2');
+    rules_clear_cache(TRUE);
+
+    $node = $this->drupalCreateNode(array('title' => 'The title.', 'status' => 1));
+    // Execute.
+    rules_invoke_component('rules_test_set_2', $node);
+
+    $msg1 = drupal_get_messages();
+    $this->assertTrue(in_array('The title.', $msg1['status']), 'First rule evaluated.');
+    $this->assertTrue(in_array('Node is published.', $msg1['status']), 'Second rule evaluated.');
 
     RulesLog::logger()->checkLog();
   }

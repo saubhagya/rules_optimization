@@ -408,7 +408,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Invoked by removeEmptyContainers(). It searches recursively.
+   * Searches recursively for empty container.
    *
    * @param $condition
    *   Possible condition container, which is to be checked for emptiness.
@@ -417,16 +417,15 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    *   TRUE if container is empty otherwise FALSE.
    */
   protected function isEmptyContainer($condition) {
-    $return = TRUE;
     if ($condition instanceof RulesOR || $condition instanceof RulesAND) {
       foreach ($condition as $c) {
-        $return &= $this->isEmptyContainer($c);
+        if ($this->isEmptyContainer($c) == FALSE) {
+          return FALSE;
+        }
       }
-      return $return;
+      return TRUE;
     }
-    else {
-      return FALSE;
-    }
+    return FALSE;
   }
 
   /**
