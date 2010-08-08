@@ -224,28 +224,5 @@ class RulesOptimizationTestCase extends DrupalWebTestCase {
 
     RulesLog::logger()->checkLog();
   }
-
-  function testOptimizedRuleSets() {
-    $set = rules_rule_set(array(
-      'node' => array('type' => 'node', 'label' => 'node'),
-    ));
-    $set->rule(rule()->action('drupal_message', array('message:select' => 'node:title')))
-        ->rule(rule()->condition('rules_condition_content_is_published')
-                     ->condition(rules_condition('php_eval', array('code' => 'return TRUE;')))
-                     ->action('drupal_message', array('message' => 'Node is published.'))
-               )
-        ->rule(rule());
-    $set->save('rules_test_set_2');
-    rules_clear_cache(TRUE);
-
-    $node = $this->drupalCreateNode(array('title' => 'The title.', 'status' => 1));
-    // Execute.
-    rules_invoke_component('rules_test_set_2', $node);
-
-    $msg1 = drupal_get_messages();
-    $this->assertTrue(in_array('The title.', $msg1['status']), 'First rule evaluated.');
-    $this->assertTrue(in_array('Node is published.', $msg1['status']), 'Second rule evaluated.');
-
-    RulesLog::logger()->checkLog();
-  }
 }
+

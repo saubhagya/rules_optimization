@@ -32,13 +32,7 @@ class RulesOptimizationTreeNode extends RulesPlugin implements RulesActionInterf
    * Overrides default evaluate method.
    */
   public function evaluate(RulesState $state) {
-    if ($this->isLeaf()) {
-      // It is a leaf evaluate all actions of leafActions array.
-      foreach ($this->leafActions as $action) {
-        $action->evaluate($state);
-      }
-    }
-    elseif (isset($this->conditionData)) {
+    if (!$this->isLeaf()) {
       if ($this->conditionData->evaluate($state)) {
         // Condition is evaluated TRUE, go to trueTree.
         $this->trueTree->evaluate($state);
@@ -46,6 +40,12 @@ class RulesOptimizationTreeNode extends RulesPlugin implements RulesActionInterf
       else {
         // Condition is evaluated FALSE, go to flaseTree.
         $this->falseTree->evaluate($state);
+      }
+    }
+    else {
+      // It is a leaf evaluate all actions of leafActions array.
+      foreach ($this->leafActions as $action) {
+        $action->evaluate($state);
       }
     }
   }
@@ -148,7 +148,7 @@ class RulesOptimizationTreeNode extends RulesPlugin implements RulesActionInterf
   }
 
   public function __sleep() {
-    return array('conditionData', 'trueTree', 'falseTree', 'leafActions');
+    return parent::__sleep() + array('conditionData', 'trueTree', 'falseTree', 'leafActions');
   }
 }
 
@@ -164,26 +164,10 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
 
     $tree = NULL;
     $maxConditionSet = array();
-    $optimizableRules = array();
-    $nonOptimizableRules = array();
     $processedRules = array();
     $rules = $this->getExtendable();
 
-    if ($this->getExtendable() instanceof RulesEventSet) {
-      $optimizableRules = $rules;
-    }
-    elseif ($this->getExtendable() instanceof RulesRuleSet) {
-      try {
-        $rules->integrityCheck();
-        $optimizableRules = $rules;
-      }
-      catch (RulesException $e) {
-        // Rules fail in integrity check so these can't be optimized.
-        $nonOptimizableRules = $rules;
-      }
-    }
-
-    foreach ($optimizableRules as $rule) {
+    foreach ($rules as $rule) {
       if ($rule->conditions() != NULL) {
         // Preprocess the rule for insertion in tree.
         $data = $this->preProcessRule($rule);
@@ -199,18 +183,17 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $tree = $this->insertRules($processedRules, $maxConditionSet);
       $tree->trueTree->integrityCheck()->logTree(0);
     }
-    // Make tree and all non optimizable rules as children of event.
-    $this->makeChildren($tree, $nonOptimizableRules);
+    // Make tree as the only child of event.
+    $this->makeOnlyChild($tree);
   }
 
   /**
-   * Removes all children of event and adds the optimized tree and non-
-   * optimizable rules as children.
+   * Removes all children of event and adds the optimized tree as child.
    *
    * @param $tree
    *   Tree which is to be the only child of event.
    */
-  protected function makeChildren($tree, $nonOptimizableRules) {
+  protected function makeOnlyChild($tree) {
 
     $event = $this->getExtendable();
     // Remove all children of $event.
@@ -222,15 +205,6 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
     // Make tree as the only child of $event.
     if (isset($tree)) {
       $event->rule($tree->trueTree);
-    }
-    else {
-      // Add NULL tree as child in case non optimized array is empty.
-      $tree = new RulesOptimizationTreeNode;
-      $event->rule($tree);
-
-      foreach ($nonOptimizableRules as $rule) {
-        $event->rule($rule);
-      }
     }
     RulesLog::logger()->checkLog();
   }
@@ -450,7 +424,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
       $conditionCount = sizeof($auxConditions);
       for ($i = 0; $i < $conditionCount; $i++) {
         for ($j = $i + 1; $j < $conditionCount; $j++) {
-          if ($this->isSameTypeNotEqual($auxConditions[$i], $auxConditions[$j])) {
+          if ($this->relatedConditions($auxConditions[$i], $auxConditions[$j])) {
             // If value part is different then this would result FALSE.
             array_splice($convertedConditions, $conditionNumber, 1);
             $conditionNumber--;
@@ -663,7 +637,7 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
           // Search equal type of condition in upper levels of tree to put rest
           // of conditions in false tree of that.
           for ($auxConditionNumber = 0; $auxConditionNumber < $conditionKey; $auxConditionNumber++) {
-            if (!$matchedFlag[$auxConditionNumber] && $this->isSameTypeNotEqual($condition, $maxConditionSet[$auxConditionNumber])) {
+            if (!$matchedFlag[$auxConditionNumber] && $this->relatedConditions($condition, $maxConditionSet[$auxConditionNumber])) {
               $matchedFlag[$auxConditionNumber] = TRUE;
               $auxConditions[$auxConditionNumber] = 'EQUALTYPE';
             }
@@ -683,7 +657,8 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
   }
 
   /**
-   * Compares two unequal conditions to check if they are of same type or not.
+   * Compares two unequal conditions to check if their type is either data_is
+   * or node_is_of_type.
    *
    * @param $conditionFirst
    *   First condition to be compared.
@@ -692,12 +667,19 @@ class RulesOptimization extends FacesExtender implements RulesOptimizationInterf
    *
    * TODO: Check that this function work in every situation.
    */
-  public function isSameTypeNotEqual($conditionFirst, $conditionSecond) {
-    if ($conditionFirst->getElementName() == 'data_is' && $conditionSecond->getElementName() == 'data_is' && $conditionFirst->isNegated() == $conditionSecond->isNegated()) {
+  public function relatedConditions($conditionFirst, $conditionSecond) {
+    if ($conditionFirst->getElementName() == $conditionSecond->getElementName() && $conditionFirst->isNegated() == $conditionSecond->isNegated()) {
       $settingsFirst = $conditionFirst->settings;
       $settingsSecond = $conditionSecond->settings;
-      if (isset($settingsFirst['op']) && isset($settingsSecond['op']) && $settingsFirst['op'] == '==' && $settingsSecond['op'] == '==' && $settingsFirst['data:select'] == $settingsSecond['data:select']) {
-        if (isset($settingsFirst['value:select']) && isset($settingsSecond['value:select']) && $settingsFirst['value:select'] != $settingsSecond['value:select']) {
+      if ((isset($settingsFirst['value:select']) && isset($settingsSecond['value:select']) && $settingsFirst['value:select'] != $settingsSecond['value:select']) || (isset($settingsFirst['value']) && isset($settingsSecond['value']) && $settingsFirst['value'] != $settingsSecond['value'])) {
+        if ($conditionFirst->getElementName() == 'data_is' && $settingsFirst['data:select'] == $settingsSecond['data:select']) {
+          if ((isset($settingsFirst['op']) && isset($settingsSecond['op']) && $settingsFirst['op'] == '==' && $settingsSecond['op'] == '==') || (!isset($settingsFirst['op']) && !isset($settingsSecond['op']))) {
+            return TRUE;
+          }
+        }
+      }
+      if ($settingsFirst['type'] != $settingsSecond['type']) {
+        if ($conditionFirst->getElementName() == 'node_is_of_type') {
           return TRUE;
         }
       }
