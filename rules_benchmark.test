@@ -1,0 +1,125 @@
+<?php
+/**
+ * Benchmark optimization.
+ */
+class RulesBenchmarkTestCase extends DrupalWebTestCase {
+
+  static function getInfo() {
+    return array(
+     'name' => 'Rules Benchmark',
+     'description' => 'Compares the time of event set evaluation.',
+     'group' => 'Rules',
+    );
+  }
+
+  function setUp() {
+    parent::setUp('rules', 'entity_metadata');
+    RulesLog::logger()->clear();
+  }
+
+  protected function createTestBestCaseEventSet($number) {
+    $rules = array();
+    $rule = rules_reaction_rule();
+    $rule->event('node_presave')
+         ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page'));
+    array_push($rules, $rule);
+
+    for ($count = 1; $count < $number; ++$count) {
+      $rule = rules_reaction_rule();
+      $rule->event('node_presave')
+           ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page' . $count));
+      array_push($rules, $rule);
+    }
+    return $rules;
+  }
+
+  protected function createTestAvgCaseEventSet($number) {
+    $rules = array();
+    $half = (int) ($number / 2);
+    for ($count = 1; $count < $half; ++$count) {
+      $rule = rules_reaction_rule();
+      $rule->event('node_presave')
+           ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page' . $count));
+      array_push($rules, $rule);
+    }
+
+    $rule = rules_reaction_rule();
+    $rule->event('node_presave')
+         ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page'));
+    array_push($rules, $rule);
+    for (; $count < $number; ++$count) {
+      $rule = rules_reaction_rule();
+      $rule->event('node_presave')
+           ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page' . $count));
+      array_push($rules, $rule);
+    }
+    return $rules;
+  }
+
+  protected function createTestWorstCaseEventSet($number) {
+    $rules = array();
+    for ($count = 1; $count < $number; ++$count) {
+      $rule = rules_reaction_rule();
+      $rule->event('node_presave')
+           ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page' . $count));
+      array_push($rules, $rule);
+    }
+
+    $rule = rules_reaction_rule();
+    $rule->event('node_presave')
+         ->condition('data_is', array('data:select' => 'node:type', 'value' => 'page'));
+    array_push($rules, $rule);
+    return $rules;
+  }
+
+  public function testOptimization() {
+    $node = $this->drupalCreateNode(array('type' => 'page'));
+    $rulesCount = array(1, 10, 100, 500);
+
+    foreach ($rulesCount as $number) {
+      $rules = $this->createTestBestCaseEventSet($number);
+      foreach ($rules as $rule) {
+        $rule->save();
+      }
+      // Force immediate cache clearing.
+      rules_clear_cache(TRUE);
+      node_save($node);
+      // Trigger the rule through cached data.
+      rules_log("Evaluating best case %number rule event set", array('%number' => $number));
+      node_save($node);
+      rules_log("Finished evaluating best case %number rule event set", array('%number' => $number));
+      foreach ($rules as $rule) {
+        $rule->delete();
+      }
+
+      $rules = $this->createTestAvgCaseEventSet($number);
+      foreach ($rules as $rule) {
+        $rule->save();
+      }
+      rules_clear_cache(TRUE);
+      node_save($node);
+      rules_log("Evaluating average case %number rule event set", array('%number' => $number));
+      node_save($node);
+      rules_log("Finished evaluating average case %number rule event set", array('%number' => $number));
+      foreach ($rules as $rule) {
+        $rule->delete();
+      }
+
+      $rules = $this->createTestWorstCaseEventSet($number);
+      foreach ($rules as $rule) {
+        $rule->save();
+      }
+      rules_clear_cache(TRUE);
+      node_save($node);
+      rules_log("Evaluating worst case %number rule event set", array('%number' => $number));
+      node_save($node);
+      rules_log("Finished evaluating worst case %number rule event set", array('%number' => $number));
+      foreach ($rules as $rule) {
+        $rule->delete();
+      }
+    }
+
+    $this->pass("Benchmark test for optimized rules completed successfully.");
+    RulesLog::logger()->checkLog();
+  }
+}
