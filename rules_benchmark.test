@@ -1,6 +1,6 @@
 <?php
 /**
- * Benchmark optimization.
+ * Benchmark event set.
  */
 class RulesBenchmarkTestCase extends DrupalWebTestCase {
 
@@ -72,7 +72,7 @@ class RulesBenchmarkTestCase extends DrupalWebTestCase {
     return $rules;
   }
 
-  public function testOptimization() {
+  public function testEvaluationTime() {
     $node = $this->drupalCreateNode(array('type' => 'page'));
     $rulesCount = array(1, 10, 100, 500);
 
@@ -119,7 +119,7 @@ class RulesBenchmarkTestCase extends DrupalWebTestCase {
       }
     }
 
-    $this->pass("Benchmark test for optimized rules completed successfully.");
+    $this->pass("Benchmark test for rules completed successfully.");
     RulesLog::logger()->checkLog();
   }
 }
