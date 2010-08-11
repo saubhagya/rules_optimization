@@ -30,4 +30,12 @@ function rules_optimization_rules_plugin_info_alter(&$plugin_info) {
       ),
     ),
   );
+  $plugin_info['rule set']['extenders']['RulesOptimizationInterface'] = array(
+    'class' => 'RulesOptimization',
+    'overrides' => array(
+      'methods' => array(
+        'optimize',
+      ),
+    ),
+  );
 }
